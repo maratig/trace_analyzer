@@ -12,7 +12,7 @@ import (
 )
 
 func CreateTraceReader(sourcePath string) (*trace.Reader, io.Closer, error) {
-	// Try to recognize whether sourcePath is an url
+	// Check if sourcePath is an url
 	u, err := url.Parse(sourcePath)
 	if err == nil && u.Host != "" {
 		resp, err := http.Get(sourcePath)
@@ -27,6 +27,7 @@ func CreateTraceReader(sourcePath string) (*trace.Reader, io.Closer, error) {
 		return ret, resp.Body, nil
 	}
 
+	// Check if sourcePath is a local path
 	f, err := os.Open(sourcePath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open sourcePath as a file; %w", err)

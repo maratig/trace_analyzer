@@ -5,8 +5,8 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/maratig/trace_analyzer/internal/app"
 	"github.com/maratig/trace_analyzer/internal/server"
+	"github.com/maratig/trace_analyzer/pkg/app"
 )
 
 func main() {

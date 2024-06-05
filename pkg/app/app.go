@@ -8,13 +8,22 @@ import (
 	errPkg "github.com/maratig/trace_analyzer/internal/error"
 )
 
+var (
+	appInstance *App
+	once        sync.Once
+)
+
 type App struct {
 	mx               sync.Mutex
 	tracesInProgress []string
 }
 
 func New() *App {
-	return &App{}
+	once.Do(func() {
+		appInstance = &App{}
+	})
+
+	return appInstance
 }
 
 func (a *App) ListenTraceEvents(ctx context.Context, sourcePath string) error {
@@ -43,5 +52,5 @@ func (a *App) ListenTraceEvents(ctx context.Context, sourcePath string) error {
 }
 
 func (a *App) runListening(ctx context.Context, sourcePath string) error {
-
+	return nil
 }

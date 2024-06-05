@@ -3,12 +3,13 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
-	"github.com/maratig/trace_analyzer/internal/app"
 	errPkg "github.com/maratig/trace_analyzer/internal/error"
+	"github.com/maratig/trace_analyzer/pkg/app"
 )
 
 func StartRestServer(ctx context.Context, application *app.App) (*http.Server, error) {
@@ -19,8 +20,12 @@ func StartRestServer(ctx context.Context, application *app.App) (*http.Server, e
 		return nil, errPkg.ErrNilApp
 	}
 
+	h, err := NewHandler(application)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create handler; %w", err)
+	}
 	router := http.NewServeMux()
-	router.HandleFunc("/trace-events/listen", application.RunTraceEventsListening)
+	router.HandleFunc("/trace-events/listen", h.RunTraceEventsListening)
 
 	srv := &http.Server{
 		Addr:              "127.0.0.1:8080",
