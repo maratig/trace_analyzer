@@ -5,5 +5,6 @@ import "errors"
 var (
 	ErrNilContext          = errors.New("context must not be nil")
 	ErrNilApp              = errors.New("application must not be nil")
-	ErrEmptyEventsEndpoint = errors.New("events endpoint must not be empty")
+	ErrEmptySourcePath     = errors.New("source path must not be empty")
+	ErrTraceAlreadyRunning = errors.New("trace with given sourcePath is running already")
 )
