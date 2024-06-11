@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -16,7 +17,8 @@ var (
 
 type (
 	App struct {
-		mx               sync.Mutex
+		mx sync.Mutex
+		// nextID starts from 1
 		nextID           int
 		tracesInProgress []*service.TraceProcessor
 	}
@@ -60,4 +62,18 @@ func (a *App) ListenTraceEvents(ctx context.Context, sourcePath string) (int, er
 	}
 
 	return a.nextID, nil
+}
+
+func (a *App) Stats(ctx context.Context, id int) (int, error) {
+	if ctx == nil {
+		return 0, apiError.ErrNilContext
+	}
+	if id <= 0 {
+		return 0, errors.New("id must be positive")
+	}
+	if id >= len(a.tracesInProgress) {
+		return 0, errors.New("no item with given id")
+	}
+
+	return a.tracesInProgress[id].NumberOfGoroutines(), nil
 }

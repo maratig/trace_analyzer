@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"golang.org/x/exp/trace"
 	"os"
 	"os/signal"
 

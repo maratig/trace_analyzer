@@ -8,16 +8,16 @@ import (
 	"net/http"
 	"time"
 
-	errPkg "github.com/maratig/trace_analyzer/internal/error"
+	apiError "github.com/maratig/trace_analyzer/api/error"
 	"github.com/maratig/trace_analyzer/pkg/app"
 )
 
 func StartRestServer(ctx context.Context, application *app.App) (*http.Server, error) {
 	if ctx == nil {
-		return nil, errPkg.ErrNilContext
+		return nil, apiError.ErrNilContext
 	}
 	if application == nil {
-		return nil, errPkg.ErrNilApp
+		return nil, apiError.ErrNilApp
 	}
 
 	h, err := NewHandler(application)
@@ -26,6 +26,7 @@ func StartRestServer(ctx context.Context, application *app.App) (*http.Server, e
 	}
 	router := http.NewServeMux()
 	router.HandleFunc("/trace-events/listen", h.RunTraceEventsListening)
+	router.HandleFunc("/trace-events/stats", h.TraceEventsStat)
 
 	srv := &http.Server{
 		Addr:              "127.0.0.1:8080",

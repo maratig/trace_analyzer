@@ -38,7 +38,7 @@ func NewTraceProcessor(id int, cancel context.CancelFunc, sourcePath string) (*T
 		return nil, apiError.ErrEmptySourcePath
 	}
 
-	statIndex := make(map[int]int, defaultNumberOfGoroutines)
+	statIndex := make(map[int64]int, defaultNumberOfGoroutines)
 	stats := make([]traceStat, 0, defaultNumberOfGoroutines)
 
 	return &TraceProcessor{id: id, cancel: cancel, sourcePath: sourcePath, statIndex: statIndex, stats: stats}, nil
@@ -46,6 +46,14 @@ func NewTraceProcessor(id int, cancel context.CancelFunc, sourcePath string) (*T
 
 func (tip *TraceProcessor) IsInProgress(sourcePath string) bool {
 	return tip.sourcePath == sourcePath
+}
+
+// TODO temporary method
+func (tip *TraceProcessor) NumberOfGoroutines() int {
+	tip.mx.RLock()
+	defer tip.mx.RUnlock()
+
+	return len(tip.stats)
 }
 
 func (tip *TraceProcessor) RunListening(ctx context.Context) error {
@@ -58,10 +66,12 @@ func (tip *TraceProcessor) RunListening(ctx context.Context) error {
 		return fmt.Errorf("failed to create trace reader; %w", err)
 	}
 
+	// TODO temporary limit for development and debugging purposes
+	var counter int
 	go func() {
 		defer closer.Close()
 
-		for {
+		for counter < defaultNumberOfGoroutines {
 			if ctx.Err() != nil {
 				return
 			}
@@ -76,6 +86,7 @@ func (tip *TraceProcessor) RunListening(ctx context.Context) error {
 			}
 
 			tip.processEvent(event)
+			counter++
 		}
 	}()
 
