@@ -20,7 +20,7 @@ func StartRestServer(ctx context.Context, application *app.App) (*http.Server, e
 		return nil, apiError.ErrNilApp
 	}
 
-	h, err := NewHandler(application)
+	h, err := NewHandler(ctx, application)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create handler; %w", err)
 	}

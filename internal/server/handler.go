@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
+	apiError "github.com/maratig/trace_analyzer/api/error"
 	"github.com/maratig/trace_analyzer/pkg/app"
 )
 
@@ -16,15 +18,19 @@ const (
 )
 
 type Handler struct {
+	ctx context.Context
 	app *app.App
 }
 
-func NewHandler(app *app.App) (*Handler, error) {
+func NewHandler(ctx context.Context, app *app.App) (*Handler, error) {
+	if ctx == nil {
+		return nil, apiError.ErrNilContext
+	}
 	if app == nil {
 		return nil, errors.New("app must not be nil")
 	}
 
-	return &Handler{app: app}, nil
+	return &Handler{ctx: ctx, app: app}, nil
 }
 
 func (h *Handler) RunTraceEventsListening(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +47,7 @@ func (h *Handler) RunTraceEventsListening(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if id, err := h.app.ListenTraceEvents(r.Context(), sourcePath); err != nil {
+	if id, err := h.app.ListenTraceEvents(h.ctx, sourcePath); err != nil {
 		// TODO return an appropriate error with appropriate HTTP code
 		w.WriteHeader(http.StatusInternalServerError)
 	} else {
@@ -72,7 +78,7 @@ func (h *Handler) TraceEventsStat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := h.app.Stats(r.Context(), id)
+	data, err := h.app.Stats(h.ctx, id)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("invalid id"))

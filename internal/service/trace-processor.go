@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"sync"
 
 	"golang.org/x/exp/trace"
@@ -14,7 +16,7 @@ import (
 const defaultNumberOfGoroutines = 1000
 
 type (
-	TraceProcessor struct {
+	TraceProcess struct {
 		id         int
 		cancel     context.CancelFunc
 		sourcePath string
@@ -30,7 +32,7 @@ type (
 	}
 )
 
-func NewTraceProcessor(id int, cancel context.CancelFunc, sourcePath string) (*TraceProcessor, error) {
+func NewTraceProcessor(id int, cancel context.CancelFunc, sourcePath string) (*TraceProcess, error) {
 	if cancel == nil {
 		return nil, apiError.ErrNilContext
 	}
@@ -41,22 +43,22 @@ func NewTraceProcessor(id int, cancel context.CancelFunc, sourcePath string) (*T
 	statIndex := make(map[int64]int, defaultNumberOfGoroutines)
 	stats := make([]traceStat, 0, defaultNumberOfGoroutines)
 
-	return &TraceProcessor{id: id, cancel: cancel, sourcePath: sourcePath, statIndex: statIndex, stats: stats}, nil
+	return &TraceProcess{id: id, cancel: cancel, sourcePath: sourcePath, statIndex: statIndex, stats: stats}, nil
 }
 
-func (tip *TraceProcessor) IsInProgress(sourcePath string) bool {
+func (tip *TraceProcess) IsInProgress(sourcePath string) bool {
 	return tip.sourcePath == sourcePath
 }
 
 // TODO temporary method
-func (tip *TraceProcessor) NumberOfGoroutines() int {
+func (tip *TraceProcess) NumberOfGoroutines() int {
 	tip.mx.RLock()
 	defer tip.mx.RUnlock()
 
 	return len(tip.stats)
 }
 
-func (tip *TraceProcessor) RunListening(ctx context.Context) error {
+func (tip *TraceProcess) RunListening(ctx context.Context) error {
 	if ctx == nil {
 		return apiError.ErrNilContext
 	}
@@ -66,12 +68,10 @@ func (tip *TraceProcessor) RunListening(ctx context.Context) error {
 		return fmt.Errorf("failed to create trace reader; %w", err)
 	}
 
-	// TODO temporary limit for development and debugging purposes
-	var counter int
 	go func() {
 		defer closer.Close()
 
-		for counter < defaultNumberOfGoroutines {
+		for {
 			if ctx.Err() != nil {
 				return
 			}
@@ -79,6 +79,10 @@ func (tip *TraceProcessor) RunListening(ctx context.Context) error {
 			event, err := r.ReadEvent()
 			// TODO consider not breaking the process
 			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return
+				}
+
 				tip.mx.Lock()
 				tip.err = fmt.Errorf("failed to read event; %w", err)
 				tip.mx.Unlock()
@@ -86,19 +90,20 @@ func (tip *TraceProcessor) RunListening(ctx context.Context) error {
 			}
 
 			tip.processEvent(event)
-			counter++
 		}
 	}()
 
 	return nil
 }
 
-func (tip *TraceProcessor) processEvent(ev trace.Event) {
+func (tip *TraceProcess) processEvent(ev trace.Event) {
 	tip.mx.Lock()
 	defer tip.mx.Unlock()
 
-	// TODO allocate new space and move tip.stats there
 	if len(tip.stats) == cap(tip.stats) {
+		newStats := make([]traceStat, len(tip.stats), len(tip.stats)*2)
+		copy(newStats, tip.stats)
+		tip.stats = newStats
 	}
 
 	gID := int64(ev.Goroutine())
