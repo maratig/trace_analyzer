@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/exp/trace"
 	"sync"
 
 	apiError "github.com/maratig/trace_analyzer/api/error"
@@ -64,16 +65,18 @@ func (a *App) ListenTraceEvents(ctx context.Context, sourcePath string) (int, er
 	return a.nextID, nil
 }
 
-func (a *App) Stats(ctx context.Context, id int) (int, error) {
+func (a *App) Stats(ctx context.Context, id int) (trace.GoID, []string, error) {
 	if ctx == nil {
-		return 0, apiError.ErrNilContext
+		return 0, nil, apiError.ErrNilContext
 	}
 	if id < 0 {
-		return 0, errors.New("id must not be negative")
+		return 0, nil, errors.New("id must not be negative")
 	}
 	if len(a.traceProcesses) == 0 || id >= len(a.traceProcesses) {
-		return 0, errors.New("no item with given id")
+		return 0, nil, errors.New("no item with given id")
 	}
 
-	return a.traceProcesses[id].NumberOfGoroutines(), nil
+	gID, states := a.traceProcesses[id].GoroutineStat()
+
+	return gID, states, nil
 }

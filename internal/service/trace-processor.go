@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"sync"
 
 	"golang.org/x/exp/trace"
@@ -23,12 +24,14 @@ type (
 		mx         sync.RWMutex
 		err        error
 		// gID is a key, index in stats is a value
-		statIndex map[int64]int
+		statIndex map[trace.GoID]int
 		stats     []traceStat
 	}
 
 	traceStat struct {
-		gID int64
+		gID         trace.GoID
+		occurrences int
+		states      map[trace.EventKind]int
 	}
 )
 
@@ -40,7 +43,7 @@ func NewTraceProcessor(id int, cancel context.CancelFunc, sourcePath string) (*T
 		return nil, apiError.ErrEmptySourcePath
 	}
 
-	statIndex := make(map[int64]int, defaultNumberOfGoroutines)
+	statIndex := make(map[trace.GoID]int, defaultNumberOfGoroutines)
 	stats := make([]traceStat, 0, defaultNumberOfGoroutines)
 
 	return &TraceProcess{id: id, cancel: cancel, sourcePath: sourcePath, statIndex: statIndex, stats: stats}, nil
@@ -51,11 +54,17 @@ func (tip *TraceProcess) IsInProgress(sourcePath string) bool {
 }
 
 // TODO temporary method
-func (tip *TraceProcess) NumberOfGoroutines() int {
+func (tip *TraceProcess) GoroutineStat() (trace.GoID, []string) {
 	tip.mx.RLock()
 	defer tip.mx.RUnlock()
 
-	return len(tip.stats)
+	randomIdx := rand.IntN(len(tip.stats))
+	states := make([]string, 0, len(tip.stats[randomIdx].states))
+	for stateNum := range tip.stats[randomIdx].states {
+		states = append(states, stateNum.String())
+	}
+
+	return tip.stats[randomIdx].gID, states
 }
 
 func (tip *TraceProcess) RunListening(ctx context.Context) error {
@@ -106,12 +115,14 @@ func (tip *TraceProcess) processEvent(ev trace.Event) {
 		tip.stats = newStats
 	}
 
-	gID := int64(ev.Goroutine())
-	_, ok := tip.statIndex[gID]
+	gID := ev.Goroutine()
+	statIdx, ok := tip.statIndex[gID]
 	if !ok {
-		tip.stats = append(tip.stats, traceStat{gID: gID})
+		states := map[trace.EventKind]int{ev.Kind(): 1}
+		tip.stats = append(tip.stats, traceStat{gID: gID, occurrences: 1, states: states})
 		tip.statIndex[gID] = len(tip.stats) - 1
 	} else {
-		// TODO
+		tip.stats[statIdx].occurrences++
+		tip.stats[statIdx].states[ev.Kind()]++
 	}
 }
