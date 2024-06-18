@@ -67,21 +67,21 @@ func (a *App) ListenTraceEvents(ctx context.Context, sourcePath string) (int, er
 	return a.nextID, nil
 }
 
-func (a *App) Stats(ctx context.Context, id int) (trace.GoID, time.Duration, error) {
+func (a *App) Stats(ctx context.Context, id int) (trace.GoID, time.Duration, time.Duration, error) {
 	var gID trace.GoID
-	var dur time.Duration
+	var execTime, totalTime time.Duration
 
 	if ctx == nil {
-		return 0, dur, apiError.ErrNilContext
+		return 0, execTime, totalTime, apiError.ErrNilContext
 	}
 	if id < 0 {
-		return 0, dur, errors.New("id must not be negative")
+		return 0, execTime, totalTime, errors.New("id must not be negative")
 	}
 	if len(a.traceProcesses) == 0 || id >= len(a.traceProcesses) {
-		return 0, dur, errors.New("no item with given id")
+		return 0, execTime, totalTime, errors.New("no item with given id")
 	}
 
-	gID, dur = a.traceProcesses[id].TopIdles()
+	gID, execTime, totalTime = a.traceProcesses[id].TopIdles()
 
-	return gID, dur, nil
+	return gID, execTime, totalTime, nil
 }

@@ -33,6 +33,7 @@ type (
 		startStack  string
 		execTime    time.Duration
 		lastRunning trace.Time
+		lastSeen    trace.Time
 	}
 )
 
@@ -92,16 +93,16 @@ func (tip *TraceProcess) RunListening(ctx context.Context) error {
 	return nil
 }
 
-func (tip *TraceProcess) TopIdles() (trace.GoID, time.Duration) {
+func (tip *TraceProcess) TopIdles() (trace.GoID, time.Duration, time.Duration) {
 	tip.mx.RLock()
 	defer tip.mx.RUnlock()
 
 	gStat, ok := tip.statIndex[4765]
 	if !ok {
-		return 0, 0
+		return 0, 0, 0
 	}
 
-	return gStat.gID, gStat.execTime
+	return gStat.gID, gStat.execTime, gStat.lastSeen.Sub(gStat.firstStart)
 }
 
 func (tip *TraceProcess) processEvent(ev trace.Event) {
@@ -128,16 +129,16 @@ func (tip *TraceProcess) processEvent(ev trace.Event) {
 	gStat, ok := tip.statIndex[gID]
 	if !ok {
 		gStat = &goroutineStat{gID: gID, firstStart: ev.Time(), startStack: fmt.Sprintf("%v", st.Stack)}
+		tip.statIndex[gID] = gStat
+		tip.stats = append(tip.stats, gStat)
 	}
 
 	from, to := st.Goroutine()
-	if from == trace.GoRunnable && to == trace.GoRunning {
+	if to == trace.GoRunning {
 		gStat.lastRunning = ev.Time()
 	}
 	if from == trace.GoRunning {
 		gStat.execTime += ev.Time().Sub(gStat.lastRunning)
 	}
-
-	tip.statIndex[gID] = gStat
-	tip.stats = append(tip.stats, gStat)
+	gStat.lastSeen = ev.Time()
 }
