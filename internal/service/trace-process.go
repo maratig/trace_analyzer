@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"sync"
+	"time"
 
 	"golang.org/x/exp/trace"
 
@@ -14,7 +14,7 @@ import (
 	"github.com/maratig/trace_analyzer/internal/helper"
 )
 
-const defaultNumberOfGoroutines = 1000
+const defaultNumberOfGoroutines = 10000
 
 type (
 	TraceProcess struct {
@@ -23,15 +23,16 @@ type (
 		sourcePath string
 		mx         sync.RWMutex
 		err        error
-		// gID is a key, index in stats is a value
-		statIndex map[trace.GoID]int
-		stats     []traceStat
+		statIndex  map[trace.GoID]*goroutineStat
+		stats      []*goroutineStat
 	}
 
-	traceStat struct {
+	goroutineStat struct {
 		gID         trace.GoID
-		occurrences int
-		states      map[trace.EventKind]int
+		firstStart  trace.Time
+		startStack  string
+		execTime    time.Duration
+		lastRunning trace.Time
 	}
 )
 
@@ -43,28 +44,14 @@ func NewTraceProcessor(id int, cancel context.CancelFunc, sourcePath string) (*T
 		return nil, apiError.ErrEmptySourcePath
 	}
 
-	statIndex := make(map[trace.GoID]int, defaultNumberOfGoroutines)
-	stats := make([]traceStat, 0, defaultNumberOfGoroutines)
+	statIndex := make(map[trace.GoID]*goroutineStat, defaultNumberOfGoroutines)
+	stats := make([]*goroutineStat, 0, defaultNumberOfGoroutines)
 
 	return &TraceProcess{id: id, cancel: cancel, sourcePath: sourcePath, statIndex: statIndex, stats: stats}, nil
 }
 
 func (tip *TraceProcess) IsInProgress(sourcePath string) bool {
 	return tip.sourcePath == sourcePath
-}
-
-// TODO temporary method
-func (tip *TraceProcess) GoroutineStat() (trace.GoID, []string) {
-	tip.mx.RLock()
-	defer tip.mx.RUnlock()
-
-	randomIdx := rand.IntN(len(tip.stats))
-	states := make([]string, 0, len(tip.stats[randomIdx].states))
-	for stateNum := range tip.stats[randomIdx].states {
-		states = append(states, stateNum.String())
-	}
-
-	return tip.stats[randomIdx].gID, states
 }
 
 func (tip *TraceProcess) RunListening(ctx context.Context) error {
@@ -105,24 +92,52 @@ func (tip *TraceProcess) RunListening(ctx context.Context) error {
 	return nil
 }
 
+func (tip *TraceProcess) TopIdles() (trace.GoID, time.Duration) {
+	tip.mx.RLock()
+	defer tip.mx.RUnlock()
+
+	gStat, ok := tip.statIndex[4765]
+	if !ok {
+		return 0, 0
+	}
+
+	return gStat.gID, gStat.execTime
+}
+
 func (tip *TraceProcess) processEvent(ev trace.Event) {
+	if ev.Kind() != trace.EventStateTransition {
+		return
+	}
+	st := ev.StateTransition()
+	if st.Resource.Kind != trace.ResourceGoroutine {
+		return
+	}
+
 	tip.mx.Lock()
 	defer tip.mx.Unlock()
 
 	if len(tip.stats) == cap(tip.stats) {
-		newStats := make([]traceStat, len(tip.stats), len(tip.stats)*2)
+		// TODO improve allocation logic. Something like +100%, +80% etc. Maybe add some rule depending on the number
+		// of goroutines
+		newStats := make([]*goroutineStat, len(tip.stats), len(tip.stats)*2)
 		copy(newStats, tip.stats)
 		tip.stats = newStats
 	}
 
-	gID := ev.Goroutine()
-	statIdx, ok := tip.statIndex[gID]
+	gID := st.Resource.Goroutine()
+	gStat, ok := tip.statIndex[gID]
 	if !ok {
-		states := map[trace.EventKind]int{ev.Kind(): 1}
-		tip.stats = append(tip.stats, traceStat{gID: gID, occurrences: 1, states: states})
-		tip.statIndex[gID] = len(tip.stats) - 1
-	} else {
-		tip.stats[statIdx].occurrences++
-		tip.stats[statIdx].states[ev.Kind()]++
+		gStat = &goroutineStat{gID: gID, firstStart: ev.Time(), startStack: fmt.Sprintf("%v", st.Stack)}
 	}
+
+	from, to := st.Goroutine()
+	if from == trace.GoRunnable && to == trace.GoRunning {
+		gStat.lastRunning = ev.Time()
+	}
+	if from == trace.GoRunning {
+		gStat.execTime += ev.Time().Sub(gStat.lastRunning)
+	}
+
+	tip.statIndex[gID] = gStat
+	tip.stats = append(tip.stats, gStat)
 }

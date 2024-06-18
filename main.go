@@ -21,7 +21,7 @@ func main() {
 	srv.Shutdown(ctx)
 }
 
-//func main2() {
+//func main() {
 //	f, err := os.Open("sync-03062024.out")
 //	if err != nil {
 //		panic(err)
@@ -45,7 +45,7 @@ func main() {
 //		st := ev.StateTransition()
 //		if st.Resource.Kind == trace.ResourceGoroutine {
 //			id := st.Resource.Goroutine()
-//			if id == 4777 && ev.Goroutine() != 4777 && ev.Goroutine() != trace.NoGoroutine {
+//			if id == 4765 && ev.Goroutine() != 4765 && ev.Goroutine() != trace.NoGoroutine {
 //				println(ev.String())
 //				invokers[ev.Goroutine()] = append(invokers[ev.Goroutine()], ev.Time())
 //				//writes++

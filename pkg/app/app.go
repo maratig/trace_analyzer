@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/exp/trace"
 	"sync"
+	"time"
+
+	"golang.org/x/exp/trace"
 
 	apiError "github.com/maratig/trace_analyzer/api/error"
 	"github.com/maratig/trace_analyzer/internal/service"
@@ -65,18 +67,21 @@ func (a *App) ListenTraceEvents(ctx context.Context, sourcePath string) (int, er
 	return a.nextID, nil
 }
 
-func (a *App) Stats(ctx context.Context, id int) (trace.GoID, []string, error) {
+func (a *App) Stats(ctx context.Context, id int) (trace.GoID, time.Duration, error) {
+	var gID trace.GoID
+	var dur time.Duration
+
 	if ctx == nil {
-		return 0, nil, apiError.ErrNilContext
+		return 0, dur, apiError.ErrNilContext
 	}
 	if id < 0 {
-		return 0, nil, errors.New("id must not be negative")
+		return 0, dur, errors.New("id must not be negative")
 	}
 	if len(a.traceProcesses) == 0 || id >= len(a.traceProcesses) {
-		return 0, nil, errors.New("no item with given id")
+		return 0, dur, errors.New("no item with given id")
 	}
 
-	gID, states := a.traceProcesses[id].GoroutineStat()
+	gID, dur = a.traceProcesses[id].TopIdles()
 
-	return gID, states, nil
+	return gID, dur, nil
 }

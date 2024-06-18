@@ -78,7 +78,7 @@ func (h *Handler) TraceEventsStat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gID, states, err := h.app.Stats(h.ctx, id)
+	gID, dur, err := h.app.Stats(h.ctx, id)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("invalid id"))
@@ -86,6 +86,6 @@ func (h *Handler) TraceEventsStat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	msg := fmt.Sprintf(`{"goroutine": %d, "states": %v}`, gID, states)
+	msg := fmt.Sprintf(`{"goroutine": %d, "duration": %d}`, gID, dur.Nanoseconds())
 	w.Write([]byte(msg))
 }
