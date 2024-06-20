@@ -47,7 +47,7 @@ func (h *Handler) RunTraceEventsListening(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if id, err := h.app.ListenTraceEvents(h.ctx, sourcePath); err != nil {
+	if id, err := h.app.ProcessTraceSource(h.ctx, sourcePath); err != nil {
 		// TODO return an appropriate error with appropriate HTTP code
 		w.WriteHeader(http.StatusInternalServerError)
 	} else {

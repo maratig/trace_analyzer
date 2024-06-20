@@ -35,7 +35,7 @@ func New() *App {
 	return appInstance
 }
 
-func (a *App) ListenTraceEvents(ctx context.Context, sourcePath string) (int, error) {
+func (a *App) ProcessTraceSource(ctx context.Context, sourcePath string) (int, error) {
 	if ctx == nil {
 		return 0, apiError.ErrNilContext
 	}
@@ -60,7 +60,7 @@ func (a *App) ListenTraceEvents(ctx context.Context, sourcePath string) (int, er
 	}
 	a.traceProcesses = append(a.traceProcesses, tp)
 
-	if err = tp.RunListening(newCtx); err != nil {
+	if err = tp.Run(newCtx); err != nil {
 		return 0, fmt.Errorf("failed to run trace listening; %w", err)
 	}
 

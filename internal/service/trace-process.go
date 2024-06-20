@@ -55,7 +55,7 @@ func (tip *TraceProcess) IsInProgress(sourcePath string) bool {
 	return tip.sourcePath == sourcePath
 }
 
-func (tip *TraceProcess) RunListening(ctx context.Context) error {
+func (tip *TraceProcess) Run(ctx context.Context) error {
 	if ctx == nil {
 		return apiError.ErrNilContext
 	}
@@ -86,7 +86,7 @@ func (tip *TraceProcess) RunListening(ctx context.Context) error {
 				return
 			}
 
-			tip.processEvent(event)
+			tip.processEvent(&event)
 		}
 	}()
 
@@ -105,15 +105,7 @@ func (tip *TraceProcess) TopIdles() (trace.GoID, time.Duration, time.Duration) {
 	return gStat.gID, gStat.execTime, gStat.lastSeen.Sub(gStat.firstStart)
 }
 
-func (tip *TraceProcess) processEvent(ev trace.Event) {
-	if ev.Kind() != trace.EventStateTransition {
-		return
-	}
-	st := ev.StateTransition()
-	if st.Resource.Kind != trace.ResourceGoroutine {
-		return
-	}
-
+func (tip *TraceProcess) processEvent(ev *trace.Event) {
 	tip.mx.Lock()
 	defer tip.mx.Unlock()
 
@@ -123,6 +115,32 @@ func (tip *TraceProcess) processEvent(ev trace.Event) {
 		newStats := make([]*goroutineStat, len(tip.stats), len(tip.stats)*2)
 		copy(newStats, tip.stats)
 		tip.stats = newStats
+	}
+
+	switch ev.Kind() {
+	case trace.EventStateTransition:
+		tip.processTransitionEvent(ev)
+	default:
+		tip.processGenericEvent(ev)
+	}
+}
+
+func (tip *TraceProcess) processGenericEvent(ev *trace.Event) {
+	gID := ev.Goroutine()
+	gStat, ok := tip.statIndex[gID]
+	if !ok {
+		gStat = &goroutineStat{gID: gID, firstStart: ev.Time()}
+		tip.statIndex[gID] = gStat
+		tip.stats = append(tip.stats, gStat)
+	}
+	gStat.lastSeen = ev.Time()
+}
+
+func (tip *TraceProcess) processTransitionEvent(ev *trace.Event) {
+	st := ev.StateTransition()
+	// TODO analyze if other kind of events should be considered
+	if st.Resource.Kind != trace.ResourceGoroutine {
+		return
 	}
 
 	gID := st.Resource.Goroutine()
