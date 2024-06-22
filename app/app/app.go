@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
-
-	"golang.org/x/exp/trace"
 
 	apiError "github.com/maratig/trace_analyzer/api/error"
+	"github.com/maratig/trace_analyzer/api/object"
 	"github.com/maratig/trace_analyzer/internal/service"
 )
 
@@ -67,21 +65,16 @@ func (a *App) ProcessTraceSource(ctx context.Context, sourcePath string) (int, e
 	return a.nextID, nil
 }
 
-func (a *App) Stats(ctx context.Context, id int) (trace.GoID, time.Duration, time.Duration, error) {
-	var gID trace.GoID
-	var execTime, totalTime time.Duration
-
+func (a *App) TopGoroutines(ctx context.Context, id int) ([]object.TopGoroutine, error) {
 	if ctx == nil {
-		return 0, execTime, totalTime, apiError.ErrNilContext
+		return nil, apiError.ErrNilContext
 	}
 	if id < 0 {
-		return 0, execTime, totalTime, errors.New("id must not be negative")
+		return nil, errors.New("id must not be negative")
 	}
 	if len(a.traceProcesses) == 0 || id >= len(a.traceProcesses) {
-		return 0, execTime, totalTime, errors.New("no item with given id")
+		return nil, errors.New("no item with given id")
 	}
 
-	gID, execTime, totalTime = a.traceProcesses[id].TopIdles()
-
-	return gID, execTime, totalTime, nil
+	return a.traceProcesses[id].TopGoroutines(), nil
 }

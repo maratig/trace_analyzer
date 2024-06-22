@@ -26,7 +26,7 @@ func StartRestServer(ctx context.Context, application *app.App) (*http.Server, e
 	}
 	router := http.NewServeMux()
 	router.HandleFunc("/trace-events/listen", h.RunTraceEventsListening)
-	router.HandleFunc("/trace-events/stats", h.TraceEventsStat)
+	router.HandleFunc("/trace-events/top-goroutines", h.TopGoroutines)
 
 	srv := &http.Server{
 		Addr:              "127.0.0.1:8080",

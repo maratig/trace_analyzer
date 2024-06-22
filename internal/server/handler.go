@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -57,7 +58,7 @@ func (h *Handler) RunTraceEventsListening(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (h *Handler) TraceEventsStat(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) TopGoroutines(w http.ResponseWriter, r *http.Request) {
 	if !strings.EqualFold(r.Method, "GET") {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Only GET method is allowed"))
@@ -78,7 +79,7 @@ func (h *Handler) TraceEventsStat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gID, execTime, totalTime, err := h.app.Stats(h.ctx, id)
+	top, err := h.app.TopGoroutines(h.ctx, id)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("invalid id"))
@@ -86,6 +87,11 @@ func (h *Handler) TraceEventsStat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	msg := fmt.Sprintf(`{"goroutine": %d, "execution": %d, "total": %f}`, gID, execTime.Nanoseconds(), totalTime.Seconds())
-	w.Write([]byte(msg))
+	data, err := json.Marshal(top)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("json creation error; " + err.Error()))
+	}
+
+	w.Write(data)
 }

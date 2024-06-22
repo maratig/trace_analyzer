@@ -5,16 +5,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"sync"
 	"time"
 
 	"golang.org/x/exp/trace"
 
 	apiError "github.com/maratig/trace_analyzer/api/error"
+	"github.com/maratig/trace_analyzer/api/object"
 	"github.com/maratig/trace_analyzer/internal/helper"
 )
 
-const defaultNumberOfGoroutines = 10000
+const (
+	defaultNumberOfGoroutines    = 10000
+	defaultNumberOfTopGoroutines = 10
+)
 
 type (
 	TraceProcess struct {
@@ -93,16 +98,46 @@ func (tip *TraceProcess) Run(ctx context.Context) error {
 	return nil
 }
 
-func (tip *TraceProcess) TopIdles() (trace.GoID, time.Duration, time.Duration) {
+// TopGoroutines returns defaultNumberOfTopGoroutines most idling goroutines
+func (tip *TraceProcess) TopGoroutines() []object.TopGoroutine {
 	tip.mx.RLock()
 	defer tip.mx.RUnlock()
 
-	gStat, ok := tip.statIndex[4765]
-	if !ok {
-		return 0, 0, 0
+	numberOfTopGoroutines := defaultNumberOfTopGoroutines
+	if numberOfTopGoroutines > len(tip.stats) {
+		numberOfTopGoroutines = len(tip.stats)
 	}
 
-	return gStat.gID, gStat.execTime, gStat.lastSeen.Sub(gStat.firstStart)
+	top := helper.NewKeyValueSorter[float64, *goroutineStat](numberOfTopGoroutines)
+	for i := 0; i < numberOfTopGoroutines; i++ {
+		gStat := tip.stats[i]
+		ratio := float64(gStat.execTime.Nanoseconds()) / float64(gStat.lastRunning.Sub(gStat.firstStart).Nanoseconds())
+		top.Add(ratio, gStat)
+	}
+	sort.Sort(top)
+
+	threshold := top.LastKey()
+	for i := numberOfTopGoroutines; i < len(tip.stats); i++ {
+		gStat := tip.stats[i]
+		ratio := float64(gStat.execTime.Nanoseconds()) / float64(gStat.lastRunning.Sub(gStat.firstStart).Nanoseconds())
+		if ratio > threshold {
+			continue
+		}
+
+		top.InsertAndShift(ratio, gStat)
+	}
+
+	ret := make([]object.TopGoroutine, 0, numberOfTopGoroutines)
+	for _, t := range top.Values() {
+		ret = append(ret, object.TopGoroutine{
+			ID:           t.gID,
+			Stack:        t.startStack,
+			ExecDuration: t.execTime,
+			LiveDuration: t.lastSeen.Sub(t.firstStart),
+		})
+	}
+	
+	return ret
 }
 
 func (tip *TraceProcess) processEvent(ev *trace.Event) {
