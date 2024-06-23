@@ -9,7 +9,7 @@ import (
 	"time"
 
 	apiError "github.com/maratig/trace_analyzer/api/error"
-	"github.com/maratig/trace_analyzer/pkg/app"
+	"github.com/maratig/trace_analyzer/app"
 )
 
 func StartRestServer(ctx context.Context, application *app.App) (*http.Server, error) {

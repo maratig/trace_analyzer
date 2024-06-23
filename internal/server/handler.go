@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	apiError "github.com/maratig/trace_analyzer/api/error"
-	"github.com/maratig/trace_analyzer/pkg/app"
+	"github.com/maratig/trace_analyzer/app"
 )
 
 const (

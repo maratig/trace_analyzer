@@ -33,9 +33,10 @@ type (
 	}
 
 	goroutineStat struct {
-		gID         trace.GoID
-		firstStart  trace.Time
-		startStack  string
+		gID        trace.GoID
+		firstStart trace.Time
+		startStack string
+		// goroutine execution time in nanoseconds
 		execTime    time.Duration
 		lastRunning trace.Time
 		lastSeen    trace.Time
@@ -111,7 +112,7 @@ func (tip *TraceProcess) TopGoroutines() []object.TopGoroutine {
 	top := helper.NewKeyValueSorter[float64, *goroutineStat](numberOfTopGoroutines)
 	for i := 0; i < numberOfTopGoroutines; i++ {
 		gStat := tip.stats[i]
-		ratio := float64(gStat.execTime.Nanoseconds()) / float64(gStat.lastRunning.Sub(gStat.firstStart).Nanoseconds())
+		ratio := float64(gStat.execTime) / float64(gStat.lastSeen.Sub(gStat.firstStart))
 		top.Add(ratio, gStat)
 	}
 	sort.Sort(top)
@@ -119,12 +120,13 @@ func (tip *TraceProcess) TopGoroutines() []object.TopGoroutine {
 	threshold := top.LastKey()
 	for i := numberOfTopGoroutines; i < len(tip.stats); i++ {
 		gStat := tip.stats[i]
-		ratio := float64(gStat.execTime.Nanoseconds()) / float64(gStat.lastRunning.Sub(gStat.firstStart).Nanoseconds())
+		ratio := float64(gStat.execTime) / float64(gStat.lastSeen.Sub(gStat.firstStart))
 		if ratio > threshold {
 			continue
 		}
 
 		top.InsertAndShift(ratio, gStat)
+		threshold = top.LastKey()
 	}
 
 	ret := make([]object.TopGoroutine, 0, numberOfTopGoroutines)
@@ -136,7 +138,7 @@ func (tip *TraceProcess) TopGoroutines() []object.TopGoroutine {
 			LiveDuration: t.lastSeen.Sub(t.firstStart),
 		})
 	}
-	
+
 	return ret
 }
 
@@ -162,6 +164,10 @@ func (tip *TraceProcess) processEvent(ev *trace.Event) {
 
 func (tip *TraceProcess) processGenericEvent(ev *trace.Event) {
 	gID := ev.Goroutine()
+	if gID == trace.NoGoroutine {
+		return
+	}
+
 	gStat, ok := tip.statIndex[gID]
 	if !ok {
 		gStat = &goroutineStat{gID: gID, firstStart: ev.Time()}
