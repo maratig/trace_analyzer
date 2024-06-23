@@ -8,6 +8,7 @@ import (
 
 type TopGoroutine struct {
 	ID           trace.GoID    `json:"id"`
+	ParentStack  string        `json:"parent-stack"`
 	Stack        string        `json:"stack"`
 	ExecDuration time.Duration `json:"execution-duration"`
 	LiveDuration time.Duration `json:"live-duration"`

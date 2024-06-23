@@ -65,7 +65,7 @@ func (a *App) ProcessTraceSource(ctx context.Context, sourcePath string) (int, e
 	return a.nextID, nil
 }
 
-func (a *App) TopGoroutines(ctx context.Context, id int) ([]object.TopGoroutine, error) {
+func (a *App) TopIdlingGoroutines(ctx context.Context, id int) ([]object.TopGoroutine, error) {
 	if ctx == nil {
 		return nil, apiError.ErrNilContext
 	}
@@ -76,5 +76,5 @@ func (a *App) TopGoroutines(ctx context.Context, id int) ([]object.TopGoroutine,
 		return nil, errors.New("no item with given id")
 	}
 
-	return a.traceProcesses[id].TopGoroutines(), nil
+	return a.traceProcesses[id].TopIdlingGoroutines(), nil
 }

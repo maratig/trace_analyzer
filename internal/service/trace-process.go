@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,9 +34,10 @@ type (
 	}
 
 	goroutineStat struct {
-		gID        trace.GoID
-		firstStart trace.Time
-		startStack string
+		gID         trace.GoID
+		firstStart  trace.Time
+		parentStack string
+		stack       string
 		// goroutine execution time in nanoseconds
 		execTime    time.Duration
 		lastRunning trace.Time
@@ -99,8 +101,8 @@ func (tip *TraceProcess) Run(ctx context.Context) error {
 	return nil
 }
 
-// TopGoroutines returns defaultNumberOfTopGoroutines most idling goroutines
-func (tip *TraceProcess) TopGoroutines() []object.TopGoroutine {
+// TopIdlingGoroutines returns defaultNumberOfTopGoroutines most idling goroutines
+func (tip *TraceProcess) TopIdlingGoroutines() []object.TopGoroutine {
 	tip.mx.RLock()
 	defer tip.mx.RUnlock()
 
@@ -133,7 +135,8 @@ func (tip *TraceProcess) TopGoroutines() []object.TopGoroutine {
 	for _, t := range top.Values() {
 		ret = append(ret, object.TopGoroutine{
 			ID:           t.gID,
-			Stack:        t.startStack,
+			ParentStack:  t.parentStack,
+			Stack:        t.stack,
 			ExecDuration: t.execTime,
 			LiveDuration: t.lastSeen.Sub(t.firstStart),
 		})
@@ -187,7 +190,21 @@ func (tip *TraceProcess) processTransitionEvent(ev *trace.Event) {
 	gID := st.Resource.Goroutine()
 	gStat, ok := tip.statIndex[gID]
 	if !ok {
-		gStat = &goroutineStat{gID: gID, firstStart: ev.Time(), startStack: fmt.Sprintf("%v", st.Stack)}
+		var sb strings.Builder
+		st.Stack.Frames(func(f trace.StackFrame) bool {
+			fmt.Fprintf(&sb, "\t%s @ 0x%x\n", f.Func, f.PC)
+			fmt.Fprintf(&sb, "\t\t%s:%d\n", f.File, f.Line)
+			return true
+		})
+
+		var psb strings.Builder
+		ev.Stack().Frames(func(f trace.StackFrame) bool {
+			fmt.Fprintf(&psb, "\t%s @ 0x%x\n", f.Func, f.PC)
+			fmt.Fprintf(&psb, "\t\t%s:%d\n", f.File, f.Line)
+			return true
+		})
+
+		gStat = &goroutineStat{gID: gID, firstStart: ev.Time(), parentStack: psb.String(), stack: sb.String()}
 		tip.statIndex[gID] = gStat
 		tip.stats = append(tip.stats, gStat)
 	}
