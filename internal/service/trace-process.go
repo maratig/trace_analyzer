@@ -82,7 +82,7 @@ func (tip *TraceProcess) Run(ctx context.Context) error {
 			}
 
 			event, err := r.ReadEvent()
-			// TODO consider not breaking the process
+			// TODO consider not break the process
 			if err != nil {
 				if errors.Is(err, io.EOF) {
 					return
@@ -112,6 +112,7 @@ func (tip *TraceProcess) TopIdlingGoroutines() []object.TopGoroutine {
 	}
 
 	top := helper.NewKeyValueSorter[float64, *goroutineStat](numberOfTopGoroutines)
+	// First "numberOfTopGoroutines" goroutines are considered as top idling
 	for i := 0; i < numberOfTopGoroutines; i++ {
 		gStat := tip.stats[i]
 		ratio := float64(gStat.execTime) / float64(gStat.lastSeen.Sub(gStat.firstStart))
@@ -119,6 +120,7 @@ func (tip *TraceProcess) TopIdlingGoroutines() []object.TopGoroutine {
 	}
 	sort.Sort(top)
 
+	// The rest part of goroutines are being compared with threshold i.e. goroutines with threshold
 	threshold := top.LastKey()
 	for i := numberOfTopGoroutines; i < len(tip.stats); i++ {
 		gStat := tip.stats[i]
@@ -127,6 +129,7 @@ func (tip *TraceProcess) TopIdlingGoroutines() []object.TopGoroutine {
 			continue
 		}
 
+		// Insert found idling goroutine and push away the last one from the "top"
 		top.InsertAndShift(ratio, gStat)
 		threshold = top.LastKey()
 	}

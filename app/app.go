@@ -18,8 +18,7 @@ var (
 
 type (
 	App struct {
-		mx sync.Mutex
-		// nextID starts from 1
+		mx             sync.Mutex
 		nextID         int
 		traceProcesses []*service.TraceProcess
 	}
@@ -33,6 +32,8 @@ func New() *App {
 	return appInstance
 }
 
+// ProcessTraceSource creates a worker for reading and processing events from source. The returned int value is an id
+// of the whole process for the given source. Later using that id one can get analytical info
 func (a *App) ProcessTraceSource(ctx context.Context, sourcePath string) (int, error) {
 	if ctx == nil {
 		return 0, apiError.ErrNilContext
@@ -65,6 +66,7 @@ func (a *App) ProcessTraceSource(ctx context.Context, sourcePath string) (int, e
 	return a.nextID, nil
 }
 
+// TopIdlingGoroutines returns the top n goroutines having small execution_time/live_time ratio
 func (a *App) TopIdlingGoroutines(ctx context.Context, id int) ([]object.TopGoroutine, error) {
 	if ctx == nil {
 		return nil, apiError.ErrNilContext
