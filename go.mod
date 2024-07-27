@@ -2,4 +2,4 @@ module github.com/maratig/trace_analyzer
 
 go 1.22
 
-require golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8
+require golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
