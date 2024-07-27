@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	apiError "github.com/maratig/trace_analyzer/api/error"
@@ -30,7 +31,7 @@ func StartRestServer(ctx context.Context, application *app.App) (*http.Server, e
 
 	cfg := application.GetConfig()
 	srv := &http.Server{
-		Addr:              "127.0.0.1:" + cfg.Port,
+		Addr:              "127.0.0.1:" + strconv.Itoa(cfg.Port),
 		Handler:           router,
 		ReadHeaderTimeout: 15 * time.Second, // nolint:gomnd
 		WriteTimeout:      15 * time.Second, // nolint:gomnd

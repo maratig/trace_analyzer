@@ -12,8 +12,10 @@ import (
 
 func main() {
 	ctx, _ := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
-	port := flag.String("port", "", "port usage")
-	endpointConnectionWait := flag.Int("endpoint-connection-wait", 0, "wait connection endpoint")
+	port := flag.Int("port", 0, "port to be used in REST endpoint")
+	endpointConnectionWait := flag.Int(
+		"endpoint-connection-wait", 0, "time in seconds to wait for connection to endpoint",
+	)
 	flag.Parse()
 	cfg := app.Config{Port: *port, EndpointConnectionWait: *endpointConnectionWait}
 	application := app.NewApp(cfg)

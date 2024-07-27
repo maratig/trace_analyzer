@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	defaultPort                   = "10000"
+	defaultPort                   = 10000
 	defaultEndpointConnectionWait = 10
 )
 
@@ -30,13 +30,13 @@ type (
 	}
 
 	Config struct {
-		Port                   string
+		Port                   int
 		EndpointConnectionWait int
 	}
 )
 
 func initConfig(cfg Config) Config {
-	if cfg.Port == "" {
+	if cfg.Port <= 0 {
 		cfg.Port = defaultPort
 	}
 	if cfg.EndpointConnectionWait <= 0 {
