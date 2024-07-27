@@ -28,8 +28,9 @@ func StartRestServer(ctx context.Context, application *app.App) (*http.Server, e
 	router.HandleFunc("/trace-events/listen", h.RunTraceEventsListening)
 	router.HandleFunc("/trace-events/top-idling-goroutines", h.TopIdlingGoroutines)
 
+	cfg := application.GetConfig()
 	srv := &http.Server{
-		Addr:              "127.0.0.1:8080",
+		Addr:              "127.0.0.1:" + cfg.Port,
 		Handler:           router,
 		ReadHeaderTimeout: 15 * time.Second, // nolint:gomnd
 		WriteTimeout:      15 * time.Second, // nolint:gomnd

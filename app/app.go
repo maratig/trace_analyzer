@@ -11,6 +11,11 @@ import (
 	"github.com/maratig/trace_analyzer/internal/service"
 )
 
+const (
+	defaultPort                   = "10000"
+	defaultEndpointConnectionWait = 10
+)
+
 var (
 	appInstance *App
 	once        sync.Once
@@ -18,18 +23,40 @@ var (
 
 type (
 	App struct {
+		cfg            Config
 		mx             sync.Mutex
 		nextID         int
 		traceProcesses []*service.TraceProcess
 	}
+
+	Config struct {
+		Port                   string
+		EndpointConnectionWait int
+	}
 )
 
-func New() *App {
+func initConfig(cfg Config) Config {
+	if cfg.Port == "" {
+		cfg.Port = defaultPort
+	}
+	if cfg.EndpointConnectionWait <= 0 {
+		cfg.EndpointConnectionWait = defaultEndpointConnectionWait
+	}
+
+	return cfg
+}
+
+func NewApp(cfg Config) *App {
 	once.Do(func() {
-		appInstance = &App{nextID: -1}
+		cfg = initConfig(cfg)
+		appInstance = &App{cfg: cfg, nextID: -1}
 	})
 
 	return appInstance
+}
+
+func (a *App) GetConfig() Config {
+	return a.cfg
 }
 
 // ProcessTraceSource creates a worker for reading and processing events from source. The returned int value is an id
