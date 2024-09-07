@@ -24,7 +24,7 @@ var (
 type (
 	App struct {
 		cfg            Config
-		mx             sync.Mutex
+		mx             sync.RWMutex
 		nextID         int
 		traceProcesses []*service.TraceProcess
 	}

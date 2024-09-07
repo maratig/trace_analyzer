@@ -65,7 +65,7 @@ func (h *Handler) TopIdlingGoroutines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := r.URL.Query().Get(procIDParam)
+	idStr := r.PathValue(procIDParam)
 	if idStr == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("id is required"))
