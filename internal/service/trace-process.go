@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -17,31 +16,38 @@ import (
 	"github.com/maratig/trace_analyzer/internal/helper"
 )
 
-const (
-	defaultNumberOfGoroutines    = 10000
-	defaultNumberOfTopGoroutines = 10
-)
+const defaultNumberOfIdlingGoroutines = 20
 
 type (
 	TraceProcess struct {
 		id         int
 		cancel     context.CancelFunc
 		sourcePath string
-		mx         sync.RWMutex
 		err        error
-		statIndex  map[trace.GoID]*goroutineStat
-		stats      []*goroutineStat
+		mx         sync.RWMutex
+		// livingStats contains all active (live) goroutines
+		livingStats map[trace.GoID]*goroutineStat
+		// terminatedStats contains all destroyed goroutines
+		terminatedStats map[trace.GoID]*goroutineStat
+		// idlingGors contains a short list of idling goroutines sorted by idling time
+		// TODO Сейчас в процессе: умершие горутины переходят в terminatedStats, также idlingGors хранит висящие горутины,
+		// умершая горутина удаляется из idlingGors (если она там есть). При этом idlingGors пополняется до конца в
+		// момент запроса клиентом TopIdlingGoroutines. Т.е. idlingGors может в этот момент заполняться полностью
+		// с нуля, а может частично. В работе: TopIdlingGoroutines
+		idlingGors []*goroutineStat
 	}
 
 	goroutineStat struct {
 		gID         trace.GoID
-		firstStart  trace.Time
+		firstSeen   trace.Time
 		parentStack string
 		stack       string
 		// goroutine execution time in nanoseconds
-		execTime    time.Duration
+		execDuration time.Duration
+		// lastRunning is the time when goroutine was switched to Running
 		lastRunning trace.Time
-		lastSeen    trace.Time
+		// lastStop is the time when goroutine was switched from Running to another state
+		lastStop trace.Time
 	}
 )
 
@@ -53,10 +59,18 @@ func NewTraceProcessor(id int, cancel context.CancelFunc, sourcePath string) (*T
 		return nil, apiError.ErrEmptySourcePath
 	}
 
-	statIndex := make(map[trace.GoID]*goroutineStat, defaultNumberOfGoroutines)
-	stats := make([]*goroutineStat, 0, defaultNumberOfGoroutines)
+	livingStats := make(map[trace.GoID]*goroutineStat)
+	terminatedStats := make(map[trace.GoID]*goroutineStat)
+	idlingGors := make([]*goroutineStat, 0, defaultNumberOfIdlingGoroutines)
 
-	return &TraceProcess{id: id, cancel: cancel, sourcePath: sourcePath, statIndex: statIndex, stats: stats}, nil
+	return &TraceProcess{
+		id:              id,
+		cancel:          cancel,
+		sourcePath:      sourcePath,
+		livingStats:     livingStats,
+		terminatedStats: terminatedStats,
+		idlingGors:      idlingGors,
+	}, nil
 }
 
 func (tip *TraceProcess) IsInProgress(sourcePath string) bool {
@@ -106,42 +120,23 @@ func (tip *TraceProcess) TopIdlingGoroutines() []object.TopGoroutine {
 	tip.mx.RLock()
 	defer tip.mx.RUnlock()
 
-	numberOfTopGoroutines := defaultNumberOfTopGoroutines
-	if numberOfTopGoroutines > len(tip.stats) {
-		numberOfTopGoroutines = len(tip.stats)
+	if len(tip.idlingGors) == defaultNumberOfIdlingGoroutines {
+		return tip.convertIdlingToTop(tip.idlingGors)
 	}
 
-	top := helper.NewKeyValueSorter[float64, *goroutineStat](numberOfTopGoroutines)
-	// First "numberOfTopGoroutines" goroutines are considered as top idling
-	for i := 0; i < numberOfTopGoroutines; i++ {
-		gStat := tip.stats[i]
-		ratio := float64(gStat.execTime) / float64(gStat.lastSeen.Sub(gStat.firstStart))
-		top.Add(ratio, gStat)
-	}
-	sort.Sort(top)
+	tip.fillIdling()
 
-	// The rest part of goroutines are being compared with threshold i.e. goroutines with threshold
-	threshold := top.LastKey()
-	for i := numberOfTopGoroutines; i < len(tip.stats); i++ {
-		gStat := tip.stats[i]
-		ratio := float64(gStat.execTime) / float64(gStat.lastSeen.Sub(gStat.firstStart))
-		if ratio > threshold {
-			continue
-		}
-
-		// Insert found idling goroutine and push away the last one from the "top"
-		top.InsertAndShift(ratio, gStat)
-		threshold = top.LastKey()
+	if len(tip.idlingGors) == 0 {
+		return nil
 	}
 
-	ret := make([]object.TopGoroutine, 0, numberOfTopGoroutines)
-	for _, t := range top.Values() {
+	ret := make([]object.TopGoroutine, 0, defaultNumberOfIdlingGoroutines)
+	for _, ig := range tip.idlingGors {
 		ret = append(ret, object.TopGoroutine{
-			ID:           t.gID,
-			ParentStack:  t.parentStack,
-			Stack:        t.stack,
-			ExecDuration: t.execTime,
-			LiveDuration: t.lastSeen.Sub(t.firstStart),
+			ID:           ig.gID,
+			ParentStack:  ig.parentStack,
+			Stack:        ig.stack,
+			ExecDuration: ig.execDuration,
 		})
 	}
 
@@ -151,14 +146,6 @@ func (tip *TraceProcess) TopIdlingGoroutines() []object.TopGoroutine {
 func (tip *TraceProcess) processEvent(ev *trace.Event) {
 	tip.mx.Lock()
 	defer tip.mx.Unlock()
-
-	if len(tip.stats) == cap(tip.stats) {
-		// TODO improve allocation logic. Something like +100%, +80% etc. Maybe add some rule depending on the number
-		// of goroutines
-		newStats := make([]*goroutineStat, len(tip.stats), len(tip.stats)*2)
-		copy(newStats, tip.stats)
-		tip.stats = newStats
-	}
 
 	switch ev.Kind() {
 	case trace.EventStateTransition:
@@ -174,13 +161,11 @@ func (tip *TraceProcess) processGenericEvent(ev *trace.Event) {
 		return
 	}
 
-	gStat, ok := tip.statIndex[gID]
+	gStat, ok := tip.livingStats[gID]
 	if !ok {
-		gStat = &goroutineStat{gID: gID, firstStart: ev.Time()}
-		tip.statIndex[gID] = gStat
-		tip.stats = append(tip.stats, gStat)
+		gStat = &goroutineStat{gID: gID, firstSeen: ev.Time()}
+		tip.livingStats[gID] = gStat
 	}
-	gStat.lastSeen = ev.Time()
 }
 
 func (tip *TraceProcess) processTransitionEvent(ev *trace.Event) {
@@ -191,33 +176,96 @@ func (tip *TraceProcess) processTransitionEvent(ev *trace.Event) {
 	}
 
 	gID := st.Resource.Goroutine()
-	gStat, ok := tip.statIndex[gID]
-	if !ok {
-		var sb strings.Builder
-		st.Stack.Frames(func(f trace.StackFrame) bool {
-			fmt.Fprintf(&sb, "\t%s @ 0x%x\n", f.Func, f.PC)
-			fmt.Fprintf(&sb, "\t\t%s:%d\n", f.File, f.Line)
-			return true
-		})
-
-		var psb strings.Builder
-		ev.Stack().Frames(func(f trace.StackFrame) bool {
-			fmt.Fprintf(&psb, "\t%s @ 0x%x\n", f.Func, f.PC)
-			fmt.Fprintf(&psb, "\t\t%s:%d\n", f.File, f.Line)
-			return true
-		})
-
-		gStat = &goroutineStat{gID: gID, firstStart: ev.Time(), parentStack: psb.String(), stack: sb.String()}
-		tip.statIndex[gID] = gStat
-		tip.stats = append(tip.stats, gStat)
+	from, to := st.Goroutine()
+	if to == trace.GoNotExist {
+		tip.handleTerminated(gID)
+		return
 	}
 
-	from, to := st.Goroutine()
+	gStat, ok := tip.livingStats[gID]
+	if !ok {
+		var sb strings.Builder
+		for frame := range st.Stack.Frames() {
+			sb.WriteString(fmt.Sprintf("\t%s @ 0x%x\n\t\t%s:%d\n", frame.Func, frame.PC, frame.File, frame.Line))
+		}
+
+		var psb strings.Builder
+		for frame := range ev.Stack().Frames() {
+			psb.WriteString(fmt.Sprintf("\t%s @ 0x%x\n\t\t%s:%d\n", frame.Func, frame.PC, frame.File, frame.Line))
+		}
+
+		gStat = &goroutineStat{gID: gID, firstSeen: ev.Time(), parentStack: psb.String(), stack: sb.String()}
+		tip.livingStats[gID] = gStat
+	}
+
 	if to == trace.GoRunning {
 		gStat.lastRunning = ev.Time()
 	}
 	if from == trace.GoRunning {
-		gStat.execTime += ev.Time().Sub(gStat.lastRunning)
+		gStat.execDuration += ev.Time().Sub(gStat.lastRunning)
+		gStat.lastStop = ev.Time()
 	}
-	gStat.lastSeen = ev.Time()
+}
+
+// handleTerminated moves the corresponding goroutineStat from livingStats to terminatedStats and removes the goroutine
+// from idlingGors (if exists)
+func (tip *TraceProcess) handleTerminated(gID trace.GoID) {
+	stat, ok := tip.livingStats[gID]
+	if ok {
+		delete(tip.livingStats, gID)
+		tip.terminatedStats[gID] = stat
+		tip.removeFromIdling(stat)
+	}
+}
+
+func (tip *TraceProcess) fillIdling() {
+	edgeIdx := len(tip.idlingGors) - 1
+	edgeValue := tip.idlingGors[edgeIdx].lastStop
+	itemsToAddAndSort := helper.NewKeyValueSorter[trace.Time, *goroutineStat](cap(tip.idlingGors) - edgeIdx)
+	for _, ig := range tip.livingStats {
+		if ig.lastStop <= edgeValue {
+			continue
+		}
+
+		itemsToAddAndSort.InsertAndShift(ig.lastStop, ig)
+	}
+}
+
+func (tip *TraceProcess) removeFromIdling(stat *goroutineStat) {
+	lastIdling := len(tip.idlingGors) - 1
+	if lastIdling == -1 || stat.lastStop > tip.idlingGors[lastIdling].lastStop {
+		return
+	}
+
+	index := -1
+	for i, idling := range tip.idlingGors {
+		if idling.gID == stat.gID {
+			index = i
+			break
+		}
+	}
+	if index == -1 {
+		return
+	}
+	if index == lastIdling {
+		tip.idlingGors = tip.idlingGors[:lastIdling]
+		return
+	}
+
+	copy(tip.idlingGors[index:], tip.idlingGors[index+1:])
+	tip.idlingGors = tip.idlingGors[:len(tip.idlingGors)-1]
+}
+
+func (tip *TraceProcess) convertIdlingToTop(idling []*goroutineStat) []object.TopGoroutine {
+	ret := make([]object.TopGoroutine, 0, len(idling))
+	for _, stat := range idling {
+		ret = append(ret, object.TopGoroutine{
+			ID:           stat.gID,
+			ParentStack:  stat.parentStack,
+			Stack:        stat.stack,
+			ExecDuration: stat.execDuration,
+		})
+	}
+
+	return ret
 }
