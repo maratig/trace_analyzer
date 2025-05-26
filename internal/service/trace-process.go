@@ -121,26 +121,12 @@ func (tip *TraceProcess) TopIdlingGoroutines() []object.TopGoroutine {
 	defer tip.mx.RUnlock()
 
 	if len(tip.idlingGors) == defaultNumberOfIdlingGoroutines {
-		return tip.convertIdlingToTop(tip.idlingGors)
+		return tip.idlingAsTop()
 	}
 
 	tip.fillIdling()
 
-	if len(tip.idlingGors) == 0 {
-		return nil
-	}
-
-	ret := make([]object.TopGoroutine, 0, defaultNumberOfIdlingGoroutines)
-	for _, ig := range tip.idlingGors {
-		ret = append(ret, object.TopGoroutine{
-			ID:           ig.gID,
-			ParentStack:  ig.parentStack,
-			Stack:        ig.stack,
-			ExecDuration: ig.execDuration,
-		})
-	}
-
-	return ret
+	return tip.idlingAsTop()
 }
 
 func (tip *TraceProcess) processEvent(ev *trace.Event) {
@@ -219,8 +205,14 @@ func (tip *TraceProcess) handleTerminated(gID trace.GoID) {
 }
 
 func (tip *TraceProcess) fillIdling() {
-	edgeIdx := len(tip.idlingGors) - 1
-	edgeValue := tip.idlingGors[edgeIdx].lastStop
+	var edgeIdx int
+	var edgeValue trace.Time
+
+	if len(tip.idlingGors) > 0 {
+		edgeIdx = len(tip.idlingGors) - 1
+		edgeValue = tip.idlingGors[edgeIdx].lastStop
+	}
+
 	itemsToAddAndSort := helper.NewKeyValueSorter[trace.Time, *goroutineStat](cap(tip.idlingGors) - edgeIdx)
 	for _, ig := range tip.livingStats {
 		if ig.lastStop <= edgeValue {
@@ -229,6 +221,9 @@ func (tip *TraceProcess) fillIdling() {
 
 		itemsToAddAndSort.InsertAndShift(ig.lastStop, ig)
 	}
+
+	tip.idlingGors = tip.idlingGors[:edgeIdx+1+itemsToAddAndSort.Len()]
+	copy(tip.idlingGors[edgeIdx:], itemsToAddAndSort.Values())
 }
 
 func (tip *TraceProcess) removeFromIdling(stat *goroutineStat) {
@@ -256,9 +251,13 @@ func (tip *TraceProcess) removeFromIdling(stat *goroutineStat) {
 	tip.idlingGors = tip.idlingGors[:len(tip.idlingGors)-1]
 }
 
-func (tip *TraceProcess) convertIdlingToTop(idling []*goroutineStat) []object.TopGoroutine {
-	ret := make([]object.TopGoroutine, 0, len(idling))
-	for _, stat := range idling {
+func (tip *TraceProcess) idlingAsTop() []object.TopGoroutine {
+	if len(tip.idlingGors) == 0 {
+		return nil
+	}
+
+	ret := make([]object.TopGoroutine, 0, len(tip.idlingGors))
+	for _, stat := range tip.idlingGors {
 		ret = append(ret, object.TopGoroutine{
 			ID:           stat.gID,
 			ParentStack:  stat.parentStack,
