@@ -117,12 +117,8 @@ func (tip *TraceProcess) Run(ctx context.Context) error {
 
 // TopIdlingGoroutines returns defaultNumberOfTopGoroutines most idling goroutines
 func (tip *TraceProcess) TopIdlingGoroutines() []object.TopGoroutine {
-	tip.mx.RLock()
-	defer tip.mx.RUnlock()
-
-	if len(tip.idlingGors) == defaultNumberOfIdlingGoroutines {
-		return tip.idlingAsTop()
-	}
+	tip.mx.Lock()
+	defer tip.mx.Unlock()
 
 	tip.fillIdling()
 
@@ -205,15 +201,20 @@ func (tip *TraceProcess) handleTerminated(gID trace.GoID) {
 }
 
 func (tip *TraceProcess) fillIdling() {
-	var edgeIdx int
+	if len(tip.idlingGors) == cap(tip.idlingGors) {
+		return
+	}
+
 	var edgeValue trace.Time
+	edgeIdx, itemsToAddCap := -1, cap(tip.idlingGors)
 
 	if len(tip.idlingGors) > 0 {
 		edgeIdx = len(tip.idlingGors) - 1
 		edgeValue = tip.idlingGors[edgeIdx].lastStop
+		itemsToAddCap -= len(tip.idlingGors)
 	}
 
-	itemsToAddAndSort := helper.NewKeyValueSorter[trace.Time, *goroutineStat](cap(tip.idlingGors) - edgeIdx)
+	itemsToAddAndSort := helper.NewKeyValueSorter[trace.Time, *goroutineStat](itemsToAddCap)
 	for _, ig := range tip.livingStats {
 		if ig.lastStop <= edgeValue {
 			continue
@@ -222,8 +223,8 @@ func (tip *TraceProcess) fillIdling() {
 		itemsToAddAndSort.InsertAndShift(ig.lastStop, ig)
 	}
 
-	tip.idlingGors = tip.idlingGors[:edgeIdx+1+itemsToAddAndSort.Len()]
-	copy(tip.idlingGors[edgeIdx:], itemsToAddAndSort.Values())
+	tip.idlingGors = tip.idlingGors[:len(tip.idlingGors)+itemsToAddCap]
+	copy(tip.idlingGors[edgeIdx+1:], itemsToAddAndSort.Values())
 }
 
 func (tip *TraceProcess) removeFromIdling(stat *goroutineStat) {
