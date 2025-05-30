@@ -11,4 +11,5 @@ type TopGoroutine struct {
 	ParentStack  string        `json:"parent-stack"`
 	Stack        string        `json:"stack"`
 	ExecDuration time.Duration `json:"execution-duration"`
+	IdleDuration time.Duration `json:"idle-duration"`
 }

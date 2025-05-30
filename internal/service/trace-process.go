@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -20,11 +21,12 @@ const defaultNumberOfIdlingGoroutines = 20
 
 type (
 	TraceProcess struct {
-		id         int
-		cancel     context.CancelFunc
-		sourcePath string
-		err        error
-		mx         sync.RWMutex
+		id            int
+		cancel        context.CancelFunc
+		sourcePath    string
+		err           error
+		mx            sync.RWMutex
+		lastEventTime trace.Time
 		// livingStats contains all active (live) goroutines
 		livingStats map[trace.GoID]*goroutineStat
 		// terminatedStats contains all destroyed goroutines
@@ -129,6 +131,7 @@ func (tip *TraceProcess) processEvent(ev *trace.Event) {
 	tip.mx.Lock()
 	defer tip.mx.Unlock()
 
+	tip.lastEventTime = ev.Time()
 	switch ev.Kind() {
 	case trace.EventStateTransition:
 		tip.processTransitionEvent(ev)
@@ -182,6 +185,7 @@ func (tip *TraceProcess) processTransitionEvent(ev *trace.Event) {
 
 	if to == trace.GoRunning {
 		gStat.lastRunning = ev.Time()
+		tip.removeFromIdling(gStat)
 	}
 	if from == trace.GoRunning {
 		gStat.execDuration += ev.Time().Sub(gStat.lastRunning)
@@ -205,26 +209,35 @@ func (tip *TraceProcess) fillIdling() {
 		return
 	}
 
-	var edgeValue trace.Time
-	edgeIdx, itemsToAddCap := -1, cap(tip.idlingGors)
-
-	if len(tip.idlingGors) > 0 {
-		edgeIdx = len(tip.idlingGors) - 1
-		edgeValue = tip.idlingGors[edgeIdx].lastStop
-		itemsToAddCap -= len(tip.idlingGors)
+	keys := make([]trace.Time, 0, cap(tip.idlingGors))
+	for _, ig := range tip.idlingGors {
+		keys = append(keys, ig.lastStop)
 	}
 
-	itemsToAddAndSort := helper.NewKeyValueSorter[trace.Time, *goroutineStat](itemsToAddCap)
-	for _, ig := range tip.livingStats {
-		if ig.lastStop <= edgeValue {
+	maxIndex := cap(keys) - 1
+	for _, stat := range tip.livingStats {
+		if stat.lastStop == 0 || len(keys) == cap(keys) && stat.lastStop > keys[maxIndex] {
 			continue
 		}
 
-		itemsToAddAndSort.InsertAndShift(ig.lastStop, ig)
-	}
+		idx, found := slices.BinarySearch(keys, stat.lastStop)
+		if found || idx == maxIndex && len(keys) == cap(keys) {
+			keys[idx], tip.idlingGors[idx] = stat.lastStop, stat
+			continue
+		}
 
-	tip.idlingGors = tip.idlingGors[:len(tip.idlingGors)+itemsToAddCap]
-	copy(tip.idlingGors[edgeIdx+1:], itemsToAddAndSort.Values())
+		if len(keys) < cap(keys) {
+			keys = append(keys, stat.lastStop)
+			tip.idlingGors = append(tip.idlingGors, stat)
+		}
+		if idx == len(keys)-1 {
+			continue
+		}
+
+		copy(keys[idx+1:], keys[idx:])
+		copy(tip.idlingGors[idx+1:], tip.idlingGors[idx:])
+		keys[idx], tip.idlingGors[idx] = stat.lastStop, stat
+	}
 }
 
 func (tip *TraceProcess) removeFromIdling(stat *goroutineStat) {
@@ -259,11 +272,16 @@ func (tip *TraceProcess) idlingAsTop() []object.TopGoroutine {
 
 	ret := make([]object.TopGoroutine, 0, len(tip.idlingGors))
 	for _, stat := range tip.idlingGors {
+		var idleDur time.Duration
+		if stat.lastRunning < stat.lastStop {
+			idleDur = tip.lastEventTime.Sub(stat.lastStop)
+		}
 		ret = append(ret, object.TopGoroutine{
 			ID:           stat.gID,
 			ParentStack:  stat.parentStack,
 			Stack:        stat.stack,
 			ExecDuration: stat.execDuration,
+			IdleDuration: idleDur,
 		})
 	}
 
