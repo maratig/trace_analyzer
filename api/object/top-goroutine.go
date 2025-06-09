@@ -7,9 +7,10 @@ import (
 )
 
 type TopGoroutine struct {
-	ID           trace.GoID    `json:"id"`
-	ParentStack  string        `json:"parent-stack"`
-	Stack        string        `json:"stack"`
-	ExecDuration time.Duration `json:"execution-duration"`
-	IdleDuration time.Duration `json:"idle-duration"`
+	ID              trace.GoID    `json:"id"`
+	Stack           string        `json:"stack"`
+	TransitionStack string        `json:"transition-stack"`
+	ExecDuration    time.Duration `json:"execution-duration"`
+	IdleDuration    time.Duration `json:"idle-duration"`
+	InvokedBy       *TopGoroutine `json:"invoked-by,omitempty"`
 }
