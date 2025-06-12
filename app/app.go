@@ -32,6 +32,7 @@ type (
 	Config struct {
 		Port                   int
 		EndpointConnectionWait int
+		TraceSelf              bool
 	}
 )
 
