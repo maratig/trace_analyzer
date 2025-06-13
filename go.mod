@@ -1,7 +1,5 @@
 module github.com/maratig/trace_analyzer
 
-go 1.23.0
+go 1.24
 
-toolchain go1.23.6
-
-require golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa
+require golang.org/x/exp v0.0.0-20250606033433-dcc06ee1d476

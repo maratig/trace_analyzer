@@ -15,6 +15,7 @@ func CreateTraceReader(sourcePath string) (*trace.Reader, io.Closer, error) {
 	// Check if sourcePath is an url
 	u, err := url.Parse(sourcePath)
 	if err == nil && u.Host != "" {
+		// TODO process http codes and errors more accurately
 		resp, err := http.Get(sourcePath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get response from sourcePath; %w", err)
