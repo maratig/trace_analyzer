@@ -32,13 +32,9 @@ type (
 		// terminatedStats contains all destroyed goroutines
 		terminatedStats map[trace.GoID]*goroutineStat
 		// idlingGors contains a short list of idling goroutines sorted by idling time
-		// TODO Сейчас в процессе: умершие горутины переходят в terminatedStats, также idlingGors хранит висящие горутины,
-		// умершая горутина удаляется из idlingGors (если она там есть). При этом idlingGors пополняется до конца в
-		// момент запроса клиентом TopIdlingGoroutines. Т.е. idlingGors может в этот момент заполняться полностью
-		// с нуля, а может частично. В работе: TopIdlingGoroutines
 		idlingGors []*goroutineStat
-		// TODO more likely kind of lastSeen field is needed to track a goroutine's lifetime and remove from livingStats
-		// after some period of time, for example when lastSeen > x seconds
+		// TODO more likely some kind of "lastSeen" field would be useful to track a goroutine's lifetime and remove
+		//      from livingStats after some period of time, for example when lastSeen > x seconds
 	}
 
 	goroutineStat struct {
