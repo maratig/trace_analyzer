@@ -6,12 +6,12 @@ At any point of time one can get application statistics, for example a top 10 mo
 ## Usage
 
 ### 1. As a standalone application
-`trace_analyzer` can be used as a standalone application controlled by requests to its RESTful API endpoint. To do that `trace_analyzer` should be compiled and run. By default it listens port 8080
+`trace_analyzer` can be used as a standalone application controlled by requests to its RESTful API endpoint. To do that `trace_analyzer` should be compiled and run. By default it listens port 10000
 #### Example 1: listen an HTTP endpoint streaming trace events
 
 _Request:_
 
-```curl -X POST <analyzer_host>:<analyzer_port>/trace-events/listen -d source_path=http://example.com/debug/pprof/trace```
+```curl -X POST <analyzer_host>:<analyzer_port>/trace-events/listen -d 'source_path=http://example.com/debug/pprof/trace'```
 
 _Response:_
 
@@ -21,9 +21,9 @@ The `id` above is a unique identifier of a process listening trace events. You c
 
 _Note: instead of URL you can provide path to a file containing trace events_
 
-#### Example 2: get a top 10 idling gorotines using the `id` above ####
+#### Example 2: get a top 100 idling gorotines using the `id` above ####
 _Request_:
-```curl -X GET <analyzer_host>:<analyzer_host>/trace-events/top-idling-goroutines?id=0```
+```curl -X GET <analyzer_host>:<analyzer_host>/trace-events/0/top-idling-goroutines```
 
 _Response:_
 
@@ -31,10 +31,17 @@ _Response:_
 [
   {
     "id": 3222, <-- Goroutine ID
-    "parent-stack": "\tnet/http.(*Transport).dialConn @ 0x741e84\n\t\t/usr/local/go/src/net/http/transport.go:1800\n\tnet/http.(*Transport).dialConnFor @ 0x73fb2c\n\t\t/usr/local/go/src/net/http/transport.go:1485\n",
+    "transition-stack": "\tnet/http.(*Transport).dialConn @ 0x741e84\n\t\t/usr/local/go/src/net/http/transport.go:1800\n\tnet/http.(*Transport).dialConnFor @ 0x73fb2c\n\t\t/usr/local/go/src/net/http/transport.go:1485\n",
     "stack": "\tnet/http.(*persistConn).writeLoop @ 0x745d40\n\t\t/usr/local/go/src/net/http/transport.go:2441\n",
     "execution-duration": 0,
-    "live-duration": 2099000246336
+    "idle-duration": 304,
+    "invoked-by": {
+      "id": 322, <-- Goroutine ID
+      "transition-stack": "\tnet/http.(*Transport).dialConn @ 0x741e84\n\t\t/usr/local/go/src/net/http/transport.go:1800\n\tnet/http.(*Transport).dialConnFor @ 0x73fb2c\n\t\t/usr/local/go/src/net/http/transport.go:1485\n",
+      "stack": "\tnet/http.(*persistConn).writeLoop @ 0x745d40\n\t\t/usr/local/go/src/net/http/transport.go:2441\n",
+      "execution-duration": 0,
+      "idle-duration": 10,
+    }
   }
 ]
 ```
