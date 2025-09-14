@@ -11,7 +11,7 @@ import (
 	"github.com/maratig/trace_analyzer/internal/service"
 )
 
-// defaultApiPort is a default port for program's REST API
+// defaultApiPort is a default port for application's REST API
 const defaultApiPort = 10000
 
 var (
@@ -23,7 +23,6 @@ type (
 	App struct {
 		cfg            Config
 		mx             sync.Mutex
-		nextID         int
 		traceProcesses []*service.TraceProcess
 		heapProcesses  []*service.HeapProcess
 	}
@@ -44,7 +43,7 @@ func initConfig(cfg Config) Config {
 func NewApp(cfg Config) *App {
 	once.Do(func() {
 		cfg = initConfig(cfg)
-		appInstance = &App{cfg: cfg, nextID: -1}
+		appInstance = &App{cfg: cfg}
 	})
 
 	return appInstance
@@ -75,7 +74,7 @@ func (a *App) ProcessTraceSource(ctx context.Context, sourcePath string) (int, e
 
 	tp, err := service.NewTraceProcessor(len(a.traceProcesses), sourcePath)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create a trace processor: %w", err)
+		return 0, fmt.Errorf("failed to create a trace processor; %w", err)
 	}
 	a.traceProcesses = append(a.traceProcesses, tp)
 
@@ -105,14 +104,13 @@ func (a *App) ProcessHeapSource(ctx context.Context, sourcePath string) (int, er
 		}
 	}
 
-	newCtx, cancel := context.WithCancel(ctx)
-	hp, err := service.NewHeapProcessor(len(a.heapProcesses), cancel, sourcePath)
+	hp, err := service.NewHeapProcessor(len(a.heapProcesses), sourcePath)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create a heap profile processor: %w", err)
 	}
 	a.heapProcesses = append(a.heapProcesses, hp)
 
-	if err = hp.Run(newCtx); err != nil {
+	if err = hp.Run(ctx); err != nil {
 		return 0, fmt.Errorf("failed to run heap profile processing; %w", err)
 	}
 

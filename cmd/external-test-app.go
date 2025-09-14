@@ -37,7 +37,7 @@ func initExtTestAppCmdFlags() {
 func runExtTestApp(addr string) {
 	ctx, _ := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
 	if err := extApp.RunExternalApp(ctx, addr); err != nil {
-		panic(fmt.Sprintf("failed to run external app; %v", err))
+		panic(fmt.Sprintf("failed to run external test app; %v", err))
 	}
 	fmt.Printf("External test app is running on %s\n", addr)
 

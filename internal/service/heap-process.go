@@ -8,24 +8,19 @@ import (
 
 type (
 	HeapProcess struct {
-		id     int
-		cancel context.CancelFunc
-		cfg    dataSourceConfig
-		err    error
+		id  int
+		cfg dataSourceConfig
+		err error
 	}
 )
 
-func NewHeapProcessor(id int, cancel context.CancelFunc, sourcePath string, opts ...ConfigOption) (*HeapProcess, error) {
-	if cancel == nil {
-		return nil, apiError.ErrNilContext
-	}
+func NewHeapProcessor(id int, sourcePath string, opts ...ConfigOption) (*HeapProcess, error) {
 	if sourcePath == "" {
 		return nil, apiError.ErrEmptySourcePath
 	}
 
 	ret := HeapProcess{
-		id:     id,
-		cancel: cancel,
+		id: id,
 		cfg: dataSourceConfig{
 			sourcePath:             sourcePath,
 			endpointConnectionWait: defaultEndpointConnectionWait,
