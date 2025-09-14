@@ -22,8 +22,7 @@ const defaultNumberOfIdlingGoroutines = 100
 type (
 	TraceProcess struct {
 		id            int
-		cancel        context.CancelFunc
-		sourcePath    string
+		cfg           dataSourceConfig
 		err           error
 		mx            sync.Mutex
 		lastEventTime trace.Time
@@ -36,6 +35,8 @@ type (
 		// TODO more likely some kind of "lastSeen" field would be useful to track a goroutine's lifetime and remove
 		//      from livingStats after some period of time, for example when lastSeen > x seconds
 	}
+
+	Option func(tp *TraceProcess)
 
 	goroutineStat struct {
 		gID             trace.GoID
@@ -52,10 +53,7 @@ type (
 	}
 )
 
-func NewTraceProcessor(id int, cancel context.CancelFunc, sourcePath string) (*TraceProcess, error) {
-	if cancel == nil {
-		return nil, apiError.ErrNilContext
-	}
+func NewTraceProcessor(id int, sourcePath string, opts ...ConfigOption) (*TraceProcess, error) {
 	if sourcePath == "" {
 		return nil, apiError.ErrEmptySourcePath
 	}
@@ -64,18 +62,25 @@ func NewTraceProcessor(id int, cancel context.CancelFunc, sourcePath string) (*T
 	terminatedStats := make(map[trace.GoID]*goroutineStat)
 	idlingGors := make([]*goroutineStat, 0, defaultNumberOfIdlingGoroutines)
 
-	return &TraceProcess{
-		id:              id,
-		cancel:          cancel,
-		sourcePath:      sourcePath,
+	ret := TraceProcess{
+		id: id,
+		cfg: dataSourceConfig{
+			sourcePath:             sourcePath,
+			endpointConnectionWait: defaultEndpointConnectionWait,
+		},
 		livingStats:     livingStats,
 		terminatedStats: terminatedStats,
 		idlingGors:      idlingGors,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(&ret.cfg)
+	}
+
+	return &ret, nil
 }
 
 func (tip *TraceProcess) IsInProgress(sourcePath string) bool {
-	return tip.sourcePath == sourcePath
+	return tip.cfg.sourcePath == sourcePath
 }
 
 func (tip *TraceProcess) Run(ctx context.Context) error {
@@ -83,16 +88,16 @@ func (tip *TraceProcess) Run(ctx context.Context) error {
 		return apiError.ErrNilContext
 	}
 
-	r, closer, err := helper.CreateTraceReader(tip.sourcePath)
-	if err != nil {
-		return fmt.Errorf("failed to create trace reader; %w", err)
-	}
-
-	go func() {
+	go func(c context.Context, tp *TraceProcess) {
+		r, closer, err := helper.CreateTraceReader(c, tp.cfg.sourcePath, tp.cfg.endpointConnectionWait)
+		if err != nil {
+			tp.err = fmt.Errorf("failed to create trace reader; %w", err)
+			return
+		}
 		defer closer.Close()
 
 		for {
-			if ctx.Err() != nil {
+			if c.Err() != nil {
 				return
 			}
 
@@ -103,15 +108,15 @@ func (tip *TraceProcess) Run(ctx context.Context) error {
 					return
 				}
 
-				tip.mx.Lock()
-				tip.err = fmt.Errorf("failed to read event; %w", err)
-				tip.mx.Unlock()
+				tp.mx.Lock()
+				tp.err = fmt.Errorf("failed to read event; %w", err)
+				tp.mx.Unlock()
 				return
 			}
 
-			tip.processEvent(&event)
+			tp.processEvent(&event)
 		}
-	}()
+	}(ctx, tip)
 
 	return nil
 }

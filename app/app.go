@@ -11,10 +11,8 @@ import (
 	"github.com/maratig/trace_analyzer/internal/service"
 )
 
-const (
-	defaultPort                   = 10000
-	defaultEndpointConnectionWait = 10
-)
+// defaultApiPort is a default port for application's REST API
+const defaultApiPort = 10000
 
 var (
 	appInstance *App
@@ -24,24 +22,19 @@ var (
 type (
 	App struct {
 		cfg            Config
-		mx             sync.RWMutex
-		nextID         int
+		mx             sync.Mutex
 		traceProcesses []*service.TraceProcess
+		heapProcesses  []*service.HeapProcess
 	}
 
 	Config struct {
-		Port                   int
-		EndpointConnectionWait int
-		TraceSelf              bool
+		ApiPort int
 	}
 )
 
 func initConfig(cfg Config) Config {
-	if cfg.Port <= 0 {
-		cfg.Port = defaultPort
-	}
-	if cfg.EndpointConnectionWait <= 0 {
-		cfg.EndpointConnectionWait = defaultEndpointConnectionWait
+	if cfg.ApiPort <= 0 {
+		cfg.ApiPort = defaultApiPort
 	}
 
 	return cfg
@@ -50,7 +43,7 @@ func initConfig(cfg Config) Config {
 func NewApp(cfg Config) *App {
 	once.Do(func() {
 		cfg = initConfig(cfg)
-		appInstance = &App{cfg: cfg, nextID: -1}
+		appInstance = &App{cfg: cfg}
 	})
 
 	return appInstance
@@ -79,22 +72,52 @@ func (a *App) ProcessTraceSource(ctx context.Context, sourcePath string) (int, e
 		}
 	}
 
-	newCtx, cancel := context.WithCancel(ctx)
-	a.nextID++
-	tp, err := service.NewTraceProcessor(a.nextID, cancel, sourcePath)
+	tp, err := service.NewTraceProcessor(len(a.traceProcesses), sourcePath)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create a trace processor: %w", err)
+		return 0, fmt.Errorf("failed to create a trace processor; %w", err)
 	}
 	a.traceProcesses = append(a.traceProcesses, tp)
 
-	if err = tp.Run(newCtx); err != nil {
+	if err = tp.Run(ctx); err != nil {
 		return 0, fmt.Errorf("failed to run trace listening; %w", err)
 	}
 
-	return a.nextID, nil
+	return len(a.traceProcesses) - 1, nil
 }
 
-// TopIdlingGoroutines returns the top n goroutines having small execution_time/live_time ratio
+// ProcessHeapSource creates a worker for reading and processing heap profile data from source. The returned int value
+// is an id of the whole process for the given source. Later using that id one can get analytical info
+func (a *App) ProcessHeapSource(ctx context.Context, sourcePath string) (int, error) {
+	if ctx == nil {
+		return 0, apiError.ErrNilContext
+	}
+	if sourcePath == "" {
+		return 0, apiError.ErrEmptySourcePath
+	}
+
+	a.mx.Lock()
+	defer a.mx.Unlock()
+
+	for _, hp := range a.heapProcesses {
+		if hp.IsInProgress(sourcePath) {
+			return 0, apiError.ErrHeapProcAlreadyRunning
+		}
+	}
+
+	hp, err := service.NewHeapProcessor(len(a.heapProcesses), sourcePath)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create a heap profile processor: %w", err)
+	}
+	a.heapProcesses = append(a.heapProcesses, hp)
+
+	if err = hp.Run(ctx); err != nil {
+		return 0, fmt.Errorf("failed to run heap profile processing; %w", err)
+	}
+
+	return len(a.heapProcesses) - 1, nil
+}
+
+// TopIdlingGoroutines returns the top n inactive goroutines
 func (a *App) TopIdlingGoroutines(ctx context.Context, id int) ([]object.TopGoroutine, error) {
 	if ctx == nil {
 		return nil, apiError.ErrNilContext

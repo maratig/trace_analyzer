@@ -49,7 +49,31 @@ func (h *Handler) RunTraceEventsListening(w http.ResponseWriter, r *http.Request
 	}
 
 	if id, err := h.app.ProcessTraceSource(h.ctx, sourcePath); err != nil {
-		// TODO return an appropriate error with appropriate HTTP code
+		// TODO return appropriate error HTTP code
+		w.WriteHeader(http.StatusInternalServerError)
+	} else {
+		w.WriteHeader(http.StatusOK)
+		msg := fmt.Sprintf(`{"id": %d}`, id)
+		w.Write([]byte(msg))
+	}
+}
+
+func (h *Handler) RunHeapProfileProcessing(w http.ResponseWriter, r *http.Request) {
+	if !strings.EqualFold(r.Method, "POST") {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Only POST method is allowed"))
+		return
+	}
+
+	sourcePath := r.FormValue(sourcePathUrlParam)
+	if sourcePath == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(sourcePathUrlParam + " is required"))
+		return
+	}
+
+	if id, err := h.app.ProcessHeapSource(h.ctx, sourcePath); err != nil {
+		// TODO return appropriate error HTTP code
 		w.WriteHeader(http.StatusInternalServerError)
 	} else {
 		w.WriteHeader(http.StatusOK)
@@ -86,12 +110,16 @@ func (h *Handler) TopIdlingGoroutines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	data, err := json.Marshal(top)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("json creation error; " + err.Error()))
+	data := []byte("[]")
+	if len(top) > 0 {
+		data, err = json.Marshal(top)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("json creation error; " + err.Error()))
+			return
+		}
 	}
 
+	w.WriteHeader(http.StatusOK)
 	w.Write(data)
 }
