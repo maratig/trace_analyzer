@@ -29,6 +29,7 @@ func StartRestServer(ctx context.Context, application *app.App) (*http.Server, e
 	router.HandleFunc("/trace-events/listen", h.RunTraceEventsListening)
 	router.HandleFunc("/trace-events/{id}/top-idling-goroutines", h.TopIdlingGoroutines)
 	router.HandleFunc("/heap-profile/listen", h.RunHeapProfileProcessing)
+	router.HandleFunc("/heap-profile/{id}/profiles", h.HeapProfiles)
 
 	cfg := application.GetConfig()
 	srv := &http.Server{

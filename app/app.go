@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	apiError "github.com/maratig/trace_analyzer/api/error"
 	"github.com/maratig/trace_analyzer/api/object"
@@ -130,4 +131,20 @@ func (a *App) TopIdlingGoroutines(ctx context.Context, id int) ([]object.TopGoro
 	}
 
 	return a.traceProcesses[id].TopIdlingGoroutines(), nil
+}
+
+// HeapProfiles returns all collected heap profiles for the given id
+func (a *App) HeapProfiles(ctx context.Context, id int) ([]time.Time, error) {
+	if ctx == nil {
+		return nil, apiError.ErrNilContext
+	}
+	if id < 0 {
+		return nil, errors.New("id must not be negative")
+	}
+
+	if len(a.heapProcesses) == 0 || id >= len(a.heapProcesses) {
+		return nil, errors.New("no item with given id")
+	}
+
+	return a.heapProcesses[id].Profiles(), nil
 }

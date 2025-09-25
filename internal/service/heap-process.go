@@ -26,7 +26,7 @@ type (
 	HeapProcess struct {
 		id   int
 		cfg  dataSourceConfig
-		mx   sync.Mutex
+		mx   sync.RWMutex
 		err  error
 		stat *heapStat
 	}
@@ -117,6 +117,26 @@ func (hp *HeapProcess) Run(ctx context.Context) error {
 	}(ctx, hp)
 
 	return nil
+}
+
+// TODO for debugging purposes this method returns only times
+func (hp *HeapProcess) Profiles() []time.Time {
+	hp.mx.RLock()
+	defer hp.mx.RUnlock()
+
+	var size int
+	for _, profiles := range hp.stat.profiles {
+		size += len(profiles)
+	}
+
+	ret := make([]time.Time, 0, size)
+	for _, profiles := range hp.stat.profiles {
+		for _, profile := range profiles {
+			ret = append(ret, profile.receivedAt)
+		}
+	}
+
+	return ret
 }
 
 func (hs *heapStat) addProfile(tm time.Time, data []byte) {

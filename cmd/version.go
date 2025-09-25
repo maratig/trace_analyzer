@@ -10,7 +10,7 @@ var (
 	version    = "0.0.1"
 	versionCmd = &cobra.Command{
 		Use:   "version",
-		Short: "Print the version number of Trace analyzer",
+		Short: "Print version number of Trace analyzer",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Trace analyzer version", version)
 		},
