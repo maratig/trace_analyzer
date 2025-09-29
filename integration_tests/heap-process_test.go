@@ -2,6 +2,7 @@ package integration_tests
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -27,7 +28,12 @@ func TestProfiles(t *testing.T) {
 	err = hp.Run(ctx)
 	require.NoError(t, err)
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(4 * time.Minute)
 	profiles := hp.Profiles()
+	var current time.Time
+	for _, profile := range profiles {
+		fmt.Printf("%.2f\n", profile.Sub(current).Seconds())
+		current = profile
+	}
 	assert.NotEmpty(t, profiles)
 }

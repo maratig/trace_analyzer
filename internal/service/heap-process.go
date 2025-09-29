@@ -17,9 +17,9 @@ const (
 )
 
 var rangeStepsAndSizes = [profileRanges][2]time.Duration{
-	{profileFetchInterval, 30 * time.Minute},
-	{1 * time.Minute, 6 * time.Hour},
-	{30 * time.Minute, 24 * time.Hour},
+	{profileFetchInterval, 1 * time.Minute},
+	{30 * time.Second, 2 * time.Hour},
+	{1 * time.Minute, 4 * time.Minute},
 }
 
 type (
@@ -142,23 +142,33 @@ func (hp *HeapProcess) Profiles() []time.Time {
 func (hs *heapStat) addProfile(tm time.Time, data []byte) {
 	var lastFromRange heapProfile
 	profileToAdd := heapProfile{data: data, receivedAt: tm}
+	var gotoNextRange bool
 	for i := 0; i < len(hs.profiles); i++ {
+		gotoNextRange = false
 		if len(hs.profiles[i]) == 0 {
 			hs.profiles[i] = append(hs.profiles[i], profileToAdd)
 			break
-		} else {
-			interval := rangeStepsAndSizes[i][0]
-			if tm.Sub(hs.profiles[i][0].receivedAt) < interval {
-				break
-			}
-
-			if cap(hs.profiles[i]) == len(hs.profiles[i]) {
-				lastFromRange = hs.profiles[i][len(hs.profiles[i])-1]
-			}
-
-			copy(hs.profiles[i][1:], hs.profiles[i][0:])
-			hs.profiles[i][0] = profileToAdd
-			profileToAdd = lastFromRange
 		}
+
+		interval := rangeStepsAndSizes[i][0]
+		if tm.Sub(hs.profiles[i][0].receivedAt) < interval {
+			break
+		}
+
+		if cap(hs.profiles[i]) == len(hs.profiles[i]) {
+			lastFromRange = hs.profiles[i][len(hs.profiles[i])-1]
+			gotoNextRange = true
+		} else {
+			hs.profiles[i] = append(hs.profiles[i], heapProfile{})
+		}
+
+		copy(hs.profiles[i][1:], hs.profiles[i][0:])
+		hs.profiles[i][0] = profileToAdd
+
+		if !gotoNextRange {
+			break
+		}
+
+		profileToAdd = lastFromRange
 	}
 }
