@@ -18,7 +18,7 @@ const (
 
 var rangeStepsAndSizes = [profileRanges][2]time.Duration{
 	{profileFetchInterval, 1 * time.Minute},
-	{30 * time.Second, 2 * time.Hour},
+	{30 * time.Second, 2 * time.Minute},
 	{1 * time.Minute, 4 * time.Minute},
 }
 
@@ -119,8 +119,8 @@ func (hp *HeapProcess) Run(ctx context.Context) error {
 	return nil
 }
 
-// TODO for debugging purposes this method returns only times
-func (hp *HeapProcess) Profiles() []time.Time {
+// FIXME return some objects specified in the api package. Similar to the output in service.TraceProcess
+func (hp *HeapProcess) Profiles() [][]byte {
 	hp.mx.RLock()
 	defer hp.mx.RUnlock()
 
@@ -129,10 +129,10 @@ func (hp *HeapProcess) Profiles() []time.Time {
 		size += len(profiles)
 	}
 
-	ret := make([]time.Time, 0, size)
+	ret := make([][]byte, 0, size)
 	for _, profiles := range hp.stat.profiles {
 		for _, profile := range profiles {
-			ret = append(ret, profile.receivedAt)
+			ret = append(ret, profile.data)
 		}
 	}
 
@@ -151,7 +151,7 @@ func (hs *heapStat) addProfile(tm time.Time, data []byte) {
 		}
 
 		interval := rangeStepsAndSizes[i][0]
-		if tm.Sub(hs.profiles[i][0].receivedAt) < interval {
+		if profileToAdd.receivedAt.Sub(hs.profiles[i][0].receivedAt) < interval {
 			break
 		}
 
