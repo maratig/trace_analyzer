@@ -5,6 +5,7 @@ go 1.24.0
 toolchain go1.24.7
 
 require (
+	github.com/google/pprof v0.0.0-20250923004556-9e5a51aed1e8
 	github.com/spf13/cobra v1.10.1
 	golang.org/x/exp v0.0.0-20250911091902-df9299821621
 )

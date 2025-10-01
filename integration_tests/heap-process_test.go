@@ -1,15 +1,19 @@
+//go:build integration
+
 package integration_tests
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
 
-	"github.com/maratig/trace_analyzer/cmd"
-	"github.com/maratig/trace_analyzer/internal/service"
-
+	"github.com/google/pprof/profile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/maratig/trace_analyzer/cmd"
+	"github.com/maratig/trace_analyzer/internal/service"
 )
 
 func TestProfiles(t *testing.T) {
@@ -30,5 +34,8 @@ func TestProfiles(t *testing.T) {
 	time.Sleep(4 * time.Minute)
 	profiles := hp.Profiles()
 	assert.NotEmpty(t, profiles)
-	println(string(profiles[0]))
+	r := bytes.NewReader(profiles[0])
+	p, err := profile.Parse(r)
+	require.NoError(t, err)
+	assert.NotNil(t, p)
 }
