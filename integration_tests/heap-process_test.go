@@ -16,6 +16,8 @@ import (
 	"github.com/maratig/trace_analyzer/internal/service"
 )
 
+// TestProfiles runs a test application and a heap profiles collector. Then checks that collector returns a list of
+// heap profiles (a slice of bytes for now)
 func TestProfiles(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -31,7 +33,7 @@ func TestProfiles(t *testing.T) {
 	err = hp.Run(ctx)
 	require.NoError(t, err)
 
-	time.Sleep(4 * time.Minute)
+	time.Sleep(1 * time.Minute)
 	profiles := hp.Profiles()
 	assert.NotEmpty(t, profiles)
 	r := bytes.NewReader(profiles[0])

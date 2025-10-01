@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -36,11 +37,15 @@ func initExtTestAppCmdFlags() {
 	extTestAppCmd.Flags().StringP("addr", "a", "", "Address to be exposed to clients")
 }
 
-// RunExtTestApp is public for running integration tests
+// RunExtTestApp is public for using in integration tests
 func RunExtTestApp(ctx context.Context, addr string) error {
+	if ctx == nil {
+		return errors.New("ctx must not be nil")
+	}
 	if addr == "" {
 		addr = defaultExtTestAppAddr
 	}
+
 	if err := extApp.RunExternalApp(ctx, addr); err != nil {
 		return fmt.Errorf("failed to run external app on addr=%s; %w", addr, err)
 	}

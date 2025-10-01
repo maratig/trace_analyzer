@@ -12,14 +12,18 @@ import (
 )
 
 const (
+	// profileFetchInterval is time interval used for fetching heap profile data from source path (endpoint)
 	profileFetchInterval = 5 * time.Second
-	profileRanges        = 3
+	// profileRanges is the number of ranges containing heap profiles
+	profileRanges = 3
 )
 
+// rangeStepsAndSizes contains settings for profiles ranges. Every profiles range has profiles with specified time
+// interval and duration. For example the first range has 30 * 60 / 5 = 360 profiles
 var rangeStepsAndSizes = [profileRanges][2]time.Duration{
-	{profileFetchInterval, 1 * time.Minute},
-	{30 * time.Second, 2 * time.Minute},
-	{1 * time.Minute, 4 * time.Minute},
+	{profileFetchInterval, 30 * time.Minute},
+	{1 * time.Minute, 3 * time.Hour},
+	{30 * time.Minute, 24 * time.Hour},
 }
 
 type (
