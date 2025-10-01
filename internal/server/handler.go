@@ -82,6 +82,48 @@ func (h *Handler) RunHeapProfileProcessing(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+func (h *Handler) HeapProfiles(w http.ResponseWriter, r *http.Request) {
+	if !strings.EqualFold(r.Method, "GET") {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Only GET method is allowed"))
+		return
+	}
+
+	idStr := r.PathValue(procIDParam)
+	if idStr == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("id is required"))
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("invalid id"))
+		return
+	}
+
+	profiles, err := h.app.HeapProfiles(h.ctx, id)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("invalid id"))
+		return
+	}
+
+	data := []byte("[]")
+	if len(profiles) > 0 {
+		data, err = json.Marshal(profiles)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("json creation error; " + err.Error()))
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
+}
+
 func (h *Handler) TopIdlingGoroutines(w http.ResponseWriter, r *http.Request) {
 	if !strings.EqualFold(r.Method, "GET") {
 		w.WriteHeader(http.StatusBadRequest)
