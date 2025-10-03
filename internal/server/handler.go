@@ -105,8 +105,8 @@ func (h *Handler) HeapProfiles(w http.ResponseWriter, r *http.Request) {
 
 	profiles, err := h.app.HeapProfiles(h.ctx, id)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("invalid id"))
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
@@ -147,8 +147,8 @@ func (h *Handler) TopIdlingGoroutines(w http.ResponseWriter, r *http.Request) {
 
 	top, err := h.app.TopIdlingGoroutines(h.ctx, id)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("invalid id"))
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
 	}
 

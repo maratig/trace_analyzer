@@ -1,4 +1,4 @@
-package service
+package trace_process
 
 import (
 	"context"
@@ -17,12 +17,16 @@ import (
 	"github.com/maratig/trace_analyzer/internal/helper"
 )
 
-const defaultNumberOfIdlingGoroutines = 100
+const (
+	defaultEndpointConnectInterval  = 20 * time.Millisecond
+	defaultEndpointConnectionWait   = 60 * time.Second
+	defaultNumberOfIdlingGoroutines = 100
+)
 
 type (
 	TraceProcess struct {
 		id            int
-		cfg           dataSourceConfig
+		cfg           config
 		err           error
 		mx            sync.Mutex
 		lastEventTime trace.Time
@@ -34,6 +38,12 @@ type (
 		idlingGors []*goroutineStat
 		// TODO more likely some kind of "lastSeen" field would be useful to track a goroutine's lifetime and remove
 		//      from livingStats after some period of time, for example when lastSeen > x seconds
+	}
+
+	config struct {
+		sourcePath              string
+		endpointConnectInterval time.Duration
+		endpointConnectionWait  time.Duration
 	}
 
 	Option func(tp *TraceProcess)
@@ -53,7 +63,23 @@ type (
 	}
 )
 
-func NewTraceProcessor(id int, sourcePath string, opts ...ConfigOption) (*TraceProcess, error) {
+func WithEndpointConnectInterval(interval time.Duration) Option {
+	return func(tp *TraceProcess) {
+		if interval > 0 {
+			tp.cfg.endpointConnectInterval = interval
+		}
+	}
+}
+
+func WithEndpointConnectionWait(wait time.Duration) Option {
+	return func(tp *TraceProcess) {
+		if wait > 0 {
+			tp.cfg.endpointConnectionWait = wait
+		}
+	}
+}
+
+func NewTraceProcessor(sourcePath string, opts ...Option) (*TraceProcess, error) {
 	if sourcePath == "" {
 		return nil, apiError.ErrEmptySourcePath
 	}
@@ -63,17 +89,17 @@ func NewTraceProcessor(id int, sourcePath string, opts ...ConfigOption) (*TraceP
 	idlingGors := make([]*goroutineStat, 0, defaultNumberOfIdlingGoroutines)
 
 	ret := TraceProcess{
-		id: id,
-		cfg: dataSourceConfig{
-			sourcePath:             sourcePath,
-			endpointConnectionWait: defaultEndpointConnectionWait,
+		cfg: config{
+			sourcePath:              sourcePath,
+			endpointConnectInterval: defaultEndpointConnectInterval,
+			endpointConnectionWait:  defaultEndpointConnectionWait,
 		},
 		livingStats:     livingStats,
 		terminatedStats: terminatedStats,
 		idlingGors:      idlingGors,
 	}
 	for _, opt := range opts {
-		opt(&ret.cfg)
+		opt(&ret)
 	}
 
 	return &ret, nil

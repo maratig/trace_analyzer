@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/google/pprof/profile"
+
 	apiError "github.com/maratig/trace_analyzer/api/error"
 	"github.com/maratig/trace_analyzer/api/object"
-	"github.com/maratig/trace_analyzer/internal/service"
+	heapProcess "github.com/maratig/trace_analyzer/internal/service/heap_process"
+	traceProcess "github.com/maratig/trace_analyzer/internal/service/trace_process"
 )
 
 // defaultApiPort is a default port for application's REST API
@@ -23,8 +26,8 @@ type (
 	App struct {
 		cfg            Config
 		mx             sync.Mutex
-		traceProcesses []*service.TraceProcess
-		heapProcesses  []*service.HeapProcess
+		traceProcesses []*traceProcess.TraceProcess
+		heapProcesses  []*heapProcess.HeapProcess
 	}
 
 	Config struct {
@@ -72,7 +75,7 @@ func (a *App) ProcessTraceSource(ctx context.Context, sourcePath string) (int, e
 		}
 	}
 
-	tp, err := service.NewTraceProcessor(len(a.traceProcesses), sourcePath)
+	tp, err := traceProcess.NewTraceProcessor(sourcePath)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create a trace processor; %w", err)
 	}
@@ -104,7 +107,7 @@ func (a *App) ProcessHeapSource(ctx context.Context, sourcePath string) (int, er
 		}
 	}
 
-	hp, err := service.NewHeapProcessor(len(a.heapProcesses), sourcePath)
+	hp, err := heapProcess.NewHeapProcessor(sourcePath)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create a heap profile processor: %w", err)
 	}
@@ -133,7 +136,7 @@ func (a *App) TopIdlingGoroutines(ctx context.Context, id int) ([]object.TopGoro
 }
 
 // HeapProfiles returns all collected heap profiles for the given id
-func (a *App) HeapProfiles(ctx context.Context, id int) ([][]byte, error) {
+func (a *App) HeapProfiles(ctx context.Context, id int) ([][]*profile.Profile, error) {
 	if ctx == nil {
 		return nil, apiError.ErrNilContext
 	}
@@ -145,5 +148,5 @@ func (a *App) HeapProfiles(ctx context.Context, id int) ([][]byte, error) {
 		return nil, errors.New("no item with given id")
 	}
 
-	return a.heapProcesses[id].Profiles(), nil
+	return a.heapProcesses[id].Profiles()
 }
