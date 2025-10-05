@@ -18,7 +18,7 @@ import (
 const defaultHttpListeningSeconds = 36000
 
 func CreateTraceReader(
-	ctx context.Context, sourcePath string, endpointConnectionWaitSec int,
+	ctx context.Context, sourcePath string, endpointConnectionWait time.Duration,
 ) (*trace.Reader, io.Closer, error) {
 	if ctx == nil {
 		return nil, nil, errors.New("ctx must not be nil")
@@ -26,14 +26,14 @@ func CreateTraceReader(
 	if sourcePath == "" {
 		return nil, nil, errors.New("sourcePath must not be empty")
 	}
-	if endpointConnectionWaitSec <= 0 {
-		return nil, nil, errors.New("endpointConnectionWaitSec must be greater than zero")
+	if endpointConnectionWait <= 0 {
+		return nil, nil, errors.New("endpointConnectionWait must be greater than zero")
 	}
 
 	// Check if sourcePath is a url
 	u, err := url.Parse(sourcePath)
 	if err == nil && u.Host != "" {
-		r, closer, err := createHttpReader(ctx, u, endpointConnectionWaitSec)
+		r, closer, err := createHttpReader(ctx, u, endpointConnectionWait)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create an http reader; %w", err)
 		}
@@ -55,9 +55,9 @@ func CreateTraceReader(
 }
 
 func createHttpReader(
-	ctx context.Context, u *url.URL, endpointConnectionWaitSec int,
+	ctx context.Context, u *url.URL, endpointConnectionWait time.Duration,
 ) (*trace.Reader, io.Closer, error) {
-	localCtx, cancel := context.WithTimeout(ctx, time.Duration(endpointConnectionWaitSec)*time.Second)
+	localCtx, cancel := context.WithTimeout(ctx, endpointConnectionWait)
 	defer cancel()
 
 	params := u.Query()

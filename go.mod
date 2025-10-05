@@ -5,9 +5,9 @@ go 1.24.0
 toolchain go1.24.7
 
 require (
-	github.com/google/pprof v0.0.0-20250923004556-9e5a51aed1e8
+	github.com/google/pprof v0.0.0-20251002213607-436353cc1ee6
 	github.com/spf13/cobra v1.10.1
-	golang.org/x/exp v0.0.0-20250911091902-df9299821621
+	golang.org/x/exp v0.0.0-20251002181428-27f1f14c8bb9
 )
 
 require (

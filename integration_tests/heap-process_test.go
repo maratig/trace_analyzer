@@ -1,19 +1,16 @@
-//go:build integration
-
 package integration_tests
 
 import (
-	"bytes"
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
-	"github.com/google/pprof/profile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/maratig/trace_analyzer/cmd"
-	"github.com/maratig/trace_analyzer/internal/service"
+	heapProcess "github.com/maratig/trace_analyzer/internal/service/heap_process"
 )
 
 // TestProfiles runs a test application and a heap profiles collector. Then checks that collector returns a list of
@@ -28,16 +25,20 @@ func TestProfiles(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	hp, err := service.NewHeapProcessor(0, "http://"+addr+"/debug/pprof/heap")
+	opts := []heapProcess.Option{
+		heapProcess.WithProfileRangeConfig(1*time.Second, 30*time.Second),
+		heapProcess.WithProfileRangeConfig(10*time.Second, 30*time.Second),
+	}
+	hp, err := heapProcess.NewHeapProcessor("http://"+addr+"/debug/pprof/heap", opts...)
 	require.NoError(t, err)
 	err = hp.Run(ctx)
 	require.NoError(t, err)
 
-	time.Sleep(1 * time.Minute)
-	profiles := hp.Profiles()
-	assert.NotEmpty(t, profiles)
-	r := bytes.NewReader(profiles[0])
-	p, err := profile.Parse(r)
+	time.Sleep(31 * time.Second)
+	profiles, err := hp.Profiles()
 	require.NoError(t, err)
-	assert.NotNil(t, p)
+	assert.Len(t, profiles, 2)
+	assert.True(t, len(profiles[0]) > 29 && len(profiles[0]) < 32)
+	assert.True(t, len(profiles[0]) > 3 && len(profiles[1]) < 5)
+	fmt.Printf("%v", profiles[0][0])
 }
