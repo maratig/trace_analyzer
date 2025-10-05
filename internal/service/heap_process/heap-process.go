@@ -76,12 +76,11 @@ func NewHeapProcessor(sourcePath string, opts ...Option) (*HeapProcess, error) {
 		opt(&ret)
 	}
 	// Calculating profile ranges according to configuration
-	rangeConfigs := defaultRangeConfigs
-	if len(ret.cfg.ranges) > 0 {
-		rangeConfigs = ret.cfg.ranges
+	if len(ret.cfg.ranges) == 0 {
+		ret.cfg.ranges = defaultRangeConfigs
 	}
-	profiles := make([][]heapProfile, len(rangeConfigs))
-	for i, r := range rangeConfigs {
+	profiles := make([][]heapProfile, len(ret.cfg.ranges))
+	for i, r := range ret.cfg.ranges {
 		profiles[i] = make([]heapProfile, 0, r.size/r.interval+1)
 	}
 	ret.stat = &heapStat{profiles}
