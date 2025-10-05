@@ -6,9 +6,10 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/spf13/cobra"
+
 	"github.com/maratig/trace_analyzer/app"
 	"github.com/maratig/trace_analyzer/internal/server"
-	"github.com/spf13/cobra"
 )
 
 const defaultAnalyzerPort = 10000
