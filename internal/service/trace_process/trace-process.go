@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	// defaultEndpointConnectInterval is a retry interval after every failed connecting attempt
 	defaultEndpointConnectInterval  = 20 * time.Millisecond
 	defaultEndpointConnectionWait   = 60 * time.Second
 	defaultNumberOfIdlingGoroutines = 100

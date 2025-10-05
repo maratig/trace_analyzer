@@ -31,5 +31,5 @@ func TestGoroutineStat(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	gors := tp.TopIdlingGoroutines()
 	assert.NotEmpty(t, gors)
-	fmt.Printf("%v", gors)
+	fmt.Printf("%v", gors[0])
 }
