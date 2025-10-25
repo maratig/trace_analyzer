@@ -2,7 +2,6 @@ package integration_tests
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -35,10 +34,9 @@ func TestProfiles(t *testing.T) {
 	require.NoError(t, err)
 
 	time.Sleep(31 * time.Second)
-	profiles, err := hp.Profiles()
+	profiles, err := hp.HeapProfilesSummary()
 	require.NoError(t, err)
 	assert.Len(t, profiles, 2)
 	assert.True(t, len(profiles[0]) > 29 && len(profiles[0]) < 32)
 	assert.True(t, len(profiles[0]) > 3 && len(profiles[1]) < 5)
-	fmt.Printf("%v", profiles[0][0])
 }
