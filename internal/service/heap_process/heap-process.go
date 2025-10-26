@@ -11,6 +11,7 @@ import (
 	"github.com/google/pprof/profile"
 
 	apiError "github.com/maratig/trace_analyzer/api/error"
+	"github.com/maratig/trace_analyzer/api/object"
 )
 
 // defaultProfileFetchInterval is a time interval used for fetching heap profile data from source path (endpoint)
@@ -145,19 +146,49 @@ func (hp *HeapProcess) Run(ctx context.Context) error {
 	return nil
 }
 
-func (hp *HeapProcess) Profiles() ([][]*profile.Profile, error) {
+func (hp *HeapProcess) HeapProfilesSummary() ([][]object.HeapProfileSummary, error) {
 	hp.mx.RLock()
 	defer hp.mx.RUnlock()
 
-	ret := make([][]*profile.Profile, 0, len(hp.stat.profiles))
-	for _, profiles := range hp.stat.profiles {
-		profilesInRange := make([]*profile.Profile, 0, len(profiles))
-		for _, pf := range profiles {
-			pfToAdd, err := profile.ParseData(pf.data)
+	ret := make([][]object.HeapProfileSummary, 0, len(hp.stat.profiles))
+	for _, rawProfiles := range hp.stat.profiles {
+		profilesInRange := make([]object.HeapProfileSummary, 0, len(rawProfiles))
+		for _, rawProfile := range rawProfiles {
+			pf, err := profile.ParseData(rawProfile.data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse profile; %w", err)
 			}
-			profilesInRange = append(profilesInRange, pfToAdd)
+
+			inuseSpaceIdx, inuseObjectsIdx, allocSpaceIdx, allocObjects := -1, -1, -1, -1
+			for i, st := range pf.SampleType {
+				switch st.Type {
+				case "inuse_space":
+					inuseSpaceIdx = i
+				case "inuse_objects":
+					inuseObjectsIdx = i
+				case "alloc_space":
+					allocSpaceIdx = i
+				case "alloc_objects":
+					allocObjects = i
+				}
+			}
+
+			summary := object.HeapProfileSummary{TimeNanos: pf.TimeNanos}
+			for _, sample := range pf.Sample {
+				if inuseSpaceIdx != -1 && inuseSpaceIdx < len(sample.Value) {
+					summary.InuseSpace += sample.Value[inuseSpaceIdx]
+				}
+				if inuseObjectsIdx != -1 && inuseObjectsIdx < len(sample.Value) {
+					summary.InuseObjects += sample.Value[inuseObjectsIdx]
+				}
+				if allocSpaceIdx != -1 && allocSpaceIdx < len(sample.Value) {
+					summary.AllocSpace += sample.Value[allocSpaceIdx]
+				}
+				if allocObjects != -1 && allocObjects < len(sample.Value) {
+					summary.AllocObjects += sample.Value[allocObjects]
+				}
+			}
+			profilesInRange = append(profilesInRange, summary)
 		}
 		ret = append(ret, profilesInRange)
 	}

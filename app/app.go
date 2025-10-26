@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/google/pprof/profile"
-
 	apiError "github.com/maratig/trace_analyzer/api/error"
 	"github.com/maratig/trace_analyzer/api/object"
 	heapProcess "github.com/maratig/trace_analyzer/internal/service/heap_process"
@@ -135,8 +133,8 @@ func (a *App) TopIdlingGoroutines(ctx context.Context, id int) ([]object.TopGoro
 	return a.traceProcesses[id].TopIdlingGoroutines(), nil
 }
 
-// HeapProfiles returns all collected heap profiles for the given id
-func (a *App) HeapProfiles(ctx context.Context, id int) ([][]*profile.Profile, error) {
+// HeapProfilesSummary returns summaries for all collected heap profiles by the given id
+func (a *App) HeapProfilesSummary(ctx context.Context, id int) ([][]object.HeapProfileSummary, error) {
 	if ctx == nil {
 		return nil, apiError.ErrNilContext
 	}
@@ -148,5 +146,5 @@ func (a *App) HeapProfiles(ctx context.Context, id int) ([][]*profile.Profile, e
 		return nil, errors.New("no item with given id")
 	}
 
-	return a.heapProcesses[id].Profiles()
+	return a.heapProcesses[id].HeapProfilesSummary()
 }

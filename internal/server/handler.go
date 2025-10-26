@@ -103,7 +103,7 @@ func (h *Handler) HeapProfiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profiles, err := h.app.HeapProfiles(h.ctx, id)
+	profiles, err := h.app.HeapProfilesSummary(h.ctx, id)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
