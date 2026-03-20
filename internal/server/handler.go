@@ -145,7 +145,7 @@ func (h *Handler) TopIdlingGoroutines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	top, err := h.app.TopIdlingGoroutines(h.ctx, id)
+	top, status, err := h.app.TopIdlingGoroutines(h.ctx, id)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
@@ -153,12 +153,17 @@ func (h *Handler) TopIdlingGoroutines(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := []byte("[]")
-	if len(top) > 0 {
-		data, err = json.Marshal(top)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("json creation error; " + err.Error()))
-			return
+
+	if status != "" {
+		data = []byte(fmt.Sprintf(`{"status": "%s"}`, status))
+	} else {
+		if len(top) > 0 {
+			data, err = json.Marshal(top)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("json creation error; " + err.Error()))
+				return
+			}
 		}
 	}
 

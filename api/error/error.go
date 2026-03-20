@@ -8,4 +8,6 @@ var (
 	ErrEmptySourcePath        = errors.New("source path must not be empty")
 	ErrTraceAlreadyRunning    = errors.New("trace with given sourcePath is running already")
 	ErrHeapProcAlreadyRunning = errors.New("heap profile processing with given sourcePath is running already")
+	ErrConnectionFailed       = errors.New("failed to connect to the endpoint")
+	ErrRetryable              = errors.New("retryable error")
 )

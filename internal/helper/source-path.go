@@ -8,10 +8,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"time"
 
+	apiError "github.com/maratig/trace_analyzer/api/error"
 	"golang.org/x/exp/trace"
 )
 
@@ -30,59 +30,53 @@ func CreateTraceReader(
 		return nil, nil, errors.New("endpointConnectionWait must be greater than zero")
 	}
 
-	// Check if sourcePath is a url
+	// Check if sourcePath is a valid url
 	u, err := url.Parse(sourcePath)
-	if err == nil && u.Host != "" {
-		r, closer, err := createHttpReader(ctx, u, endpointConnectionWait)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create an http reader; %w", err)
-		}
-		return r, closer, nil
+	if err != nil {
+		return nil, nil, fmt.Errorf("sourcePath is not a valid URL, sourcePath=%s; %w", sourcePath, err)
+	}
+	if u.Host == "" {
+		return nil, nil, fmt.Errorf("host must be present in the given sourcePath=%s", sourcePath)
 	}
 
-	// Check if sourcePath is a local path
-	f, err := os.Open(sourcePath)
+	r, closer, err := createHttpReader(u)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open sourcePath as a file; %w", err)
-	}
-	r := bufio.NewReader(f)
-	ret, err := trace.NewReader(r)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create trace reader from file sourcePath; %w", err)
+		return nil, nil, fmt.Errorf("failed to create an http reader; %w", err)
 	}
 
-	return ret, f, nil
+	return r, closer, nil
 }
 
-func createHttpReader(
-	ctx context.Context, u *url.URL, endpointConnectionWait time.Duration,
-) (*trace.Reader, io.Closer, error) {
-	localCtx, cancel := context.WithTimeout(ctx, endpointConnectionWait)
-	defer cancel()
-
+func createHttpReader(u *url.URL) (*trace.Reader, io.Closer, error) {
 	params := u.Query()
 	params.Set("seconds", strconv.Itoa(defaultHttpListeningSeconds))
 	u.RawQuery = params.Encode()
 	urlStr := u.String()
-	for {
-		if localCtx.Err() != nil {
-			return nil, nil, localCtx.Err()
-		}
 
-		resp, err := http.Get(urlStr)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get response from the given url; %w", err)
+	resp, err := http.Get(urlStr)
+	if err != nil {
+		if _, ok := errors.AsType[*url.Error](err); ok {
+			return nil, nil, fmt.Errorf("%w; %v", apiError.ErrConnectionFailed, err)
 		}
-		if resp.StatusCode >= 500 && resp.StatusCode < 600 {
-			time.Sleep(5 * time.Millisecond)
-			continue
-		}
-
-		r := bufio.NewReader(resp.Body)
-		ret, err := trace.NewReader(r)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create trace reader from url sourcePath; %w", err)
-		}
-		return ret, resp.Body, nil
+		return nil, nil, fmt.Errorf("failed to get response from the given url; %w", err)
 	}
+	if resp.StatusCode >= 500 && resp.StatusCode < 600 {
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			err = fmt.Errorf("failed to read response body; %w", err)
+		}
+		resp.Body.Close()
+		return nil, nil, fmt.Errorf(
+			"server error, status code=%d. body=%s; %w; %v",
+			resp.StatusCode, string(data), apiError.ErrConnectionFailed, err,
+		)
+	}
+
+	r := bufio.NewReader(resp.Body)
+	ret, err := trace.NewReader(r)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create trace reader from url sourcePath; %w", err)
+	}
+
+	return ret, resp.Body, nil
 }

@@ -23,7 +23,7 @@ func RunExternalApp(ctx context.Context, addr string) error {
 
 	go func() {
 		<-ctx.Done()
-		if err := srv.Shutdown(context.Background()); err != nil {
+		if err := srv.Close(); err != nil {
 			panic(fmt.Sprintf("failed to shutdown http server; %v", err))
 		}
 		cancelAppFn()
