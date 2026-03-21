@@ -143,17 +143,25 @@ func (a *App) TopIdlingGoroutines(ctx context.Context, id int) ([]object.TopGoro
 }
 
 // HeapProfilesSummary returns summaries for all collected heap profiles by the given id
-func (a *App) HeapProfilesSummary(ctx context.Context, id int) ([][]object.HeapProfileSummary, error) {
+func (a *App) HeapProfilesSummary(ctx context.Context, id int) ([][]object.HeapProfileSummary, string, error) {
 	if ctx == nil {
-		return nil, apiError.ErrNilContext
+		return nil, "", apiError.ErrNilContext
 	}
 	if id < 0 {
-		return nil, errors.New("id must not be negative")
+		return nil, "", errors.New("id must not be negative")
 	}
 
 	if len(a.heapProcesses) == 0 || id >= len(a.heapProcesses) {
-		return nil, errors.New("no item with given id")
+		return nil, "", errors.New("no item with given id")
 	}
 
-	return a.heapProcesses[id].HeapProfilesSummary()
+	ret, err := a.heapProcesses[id].HeapProfilesSummary()
+	if err != nil {
+		if errors.Is(err, apiError.ErrRetryable) {
+			return nil, apiCommon.StatusInProgress, nil
+		}
+		return nil, "", err
+	}
+
+	return ret, "", nil
 }
