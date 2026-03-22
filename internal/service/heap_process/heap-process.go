@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,8 +64,9 @@ func WithProfileRangeConfig(interval, size time.Duration) Option {
 }
 
 func NewHeapProcessor(sourcePath string, opts ...Option) (*HeapProcess, error) {
-	if sourcePath == "" {
-		return nil, apiError.ErrEmptySourcePath
+	// TODO improve the source_path validation
+	if !strings.HasPrefix(sourcePath, "http://") && !strings.HasPrefix(sourcePath, "https://") {
+		return nil, apiError.ErrInvalidSourcePath
 	}
 
 	ret := HeapProcess{

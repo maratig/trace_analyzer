@@ -81,8 +81,9 @@ func WithEndpointConnectionWait(wait time.Duration) Option {
 }
 
 func NewTraceProcessor(sourcePath string, opts ...Option) (*TraceProcess, error) {
-	if sourcePath == "" {
-		return nil, apiError.ErrEmptySourcePath
+	// TODO improve the source_path validation
+	if !strings.HasPrefix(sourcePath, "http://") && !strings.HasPrefix(sourcePath, "https://") {
+		return nil, apiError.ErrInvalidSourcePath
 	}
 
 	livingStats := make(map[trace.GoID]*goroutineStat)
