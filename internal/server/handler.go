@@ -49,8 +49,12 @@ func (h *Handler) RunTraceEventsListening(w http.ResponseWriter, r *http.Request
 	}
 
 	if id, err := h.app.ProcessTraceSource(h.ctx, sourcePath); err != nil {
-		// TODO return appropriate error HTTP code
-		w.WriteHeader(http.StatusInternalServerError)
+		if errors.Is(err, apiError.ErrInvalidSourcePath) {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(fmt.Sprintf(`{"error": %v}`, err)))
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	} else {
 		w.WriteHeader(http.StatusOK)
 		msg := fmt.Sprintf(`{"id": %d}`, id)
@@ -73,8 +77,12 @@ func (h *Handler) RunHeapProfileProcessing(w http.ResponseWriter, r *http.Reques
 	}
 
 	if id, err := h.app.ProcessHeapSource(h.ctx, sourcePath); err != nil {
-		// TODO return appropriate error HTTP code
-		w.WriteHeader(http.StatusInternalServerError)
+		if errors.Is(err, apiError.ErrInvalidSourcePath) {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(fmt.Sprintf(`{"error": %v}`, err)))
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	} else {
 		w.WriteHeader(http.StatusOK)
 		msg := fmt.Sprintf(`{"id": %d}`, id)
@@ -103,7 +111,7 @@ func (h *Handler) HeapProfiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profiles, err := h.app.HeapProfilesSummary(h.ctx, id)
+	profiles, status, err := h.app.HeapProfilesSummary(h.ctx, id)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
@@ -111,12 +119,16 @@ func (h *Handler) HeapProfiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := []byte("[]")
-	if len(profiles) > 0 {
-		data, err = json.Marshal(profiles)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("json creation error; " + err.Error()))
-			return
+	if status != "" {
+		data = []byte(fmt.Sprintf(`{"status": "%s"}`, status))
+	} else {
+		if len(profiles) > 0 {
+			data, err = json.Marshal(profiles)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("json creation error; " + err.Error()))
+				return
+			}
 		}
 	}
 
@@ -145,7 +157,7 @@ func (h *Handler) TopIdlingGoroutines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	top, err := h.app.TopIdlingGoroutines(h.ctx, id)
+	top, status, err := h.app.TopIdlingGoroutines(h.ctx, id)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
@@ -153,12 +165,17 @@ func (h *Handler) TopIdlingGoroutines(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := []byte("[]")
-	if len(top) > 0 {
-		data, err = json.Marshal(top)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("json creation error; " + err.Error()))
-			return
+
+	if status != "" {
+		data = []byte(fmt.Sprintf(`{"status": "%s"}`, status))
+	} else {
+		if len(top) > 0 {
+			data, err = json.Marshal(top)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("json creation error; " + err.Error()))
+				return
+			}
 		}
 	}
 

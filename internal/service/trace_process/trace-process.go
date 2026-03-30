@@ -19,8 +19,8 @@ import (
 
 const (
 	// defaultEndpointConnectInterval is a retry interval after every failed connecting attempt
-	defaultEndpointConnectInterval  = 20 * time.Millisecond
-	defaultEndpointConnectionWait   = 60 * time.Second
+	defaultEndpointConnectInterval  = 100 * time.Millisecond
+	defaultEndpointConnectionWait   = 15 * time.Minute
 	defaultNumberOfIdlingGoroutines = 100
 )
 
@@ -81,8 +81,9 @@ func WithEndpointConnectionWait(wait time.Duration) Option {
 }
 
 func NewTraceProcessor(sourcePath string, opts ...Option) (*TraceProcess, error) {
-	if sourcePath == "" {
-		return nil, apiError.ErrEmptySourcePath
+	// TODO improve the source_path validation
+	if !strings.HasPrefix(sourcePath, "http://") && !strings.HasPrefix(sourcePath, "https://") {
+		return nil, apiError.ErrInvalidSourcePath
 	}
 
 	livingStats := make(map[trace.GoID]*goroutineStat)
@@ -116,31 +117,48 @@ func (tip *TraceProcess) Run(ctx context.Context) error {
 	}
 
 	go func(c context.Context, tp *TraceProcess) {
-		r, closer, err := helper.CreateTraceReader(c, tp.cfg.sourcePath, tp.cfg.endpointConnectionWait)
-		if err != nil {
-			tp.err = fmt.Errorf("failed to create trace reader; %w", err)
-			return
-		}
-		defer closer.Close()
-
+		// TODO process error and retry if it is ErrConnectionFailed
+		var r *trace.Reader
+		var closer io.Closer
+		var err error
 		for {
 			if c.Err() != nil {
+				if closer != nil {
+					closer.Close()
+				}
 				return
+			}
+
+			if r == nil {
+				r, closer, err = helper.CreateTraceReader(c, tp.cfg.sourcePath, tp.cfg.endpointConnectionWait)
+				if errors.Is(err, apiError.ErrConnectionFailed) {
+					tp.mx.Lock()
+					tp.err = fmt.Errorf("%w, %v", apiError.ErrRetryable, err)
+					tp.mx.Unlock()
+					time.Sleep(tp.cfg.endpointConnectInterval)
+					continue
+				}
+				if err != nil {
+					tp.mx.Lock()
+					tp.err = fmt.Errorf("failed to create trace reader; %w", err)
+					tp.mx.Unlock()
+					return
+				}
 			}
 
 			event, err := r.ReadEvent()
-			// TODO consider not break the process
 			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return
-				}
-
+				closer.Close()
+				r = nil
 				tp.mx.Lock()
-				tp.err = fmt.Errorf("failed to read event; %w", err)
+				tp.err = fmt.Errorf("%w, %v", apiError.ErrRetryable, err)
 				tp.mx.Unlock()
-				return
+				continue
 			}
 
+			tp.mx.Lock()
+			tp.err = nil
+			tp.mx.Unlock()
 			tp.processEvent(&event)
 		}
 	}(ctx, tip)
@@ -149,13 +167,17 @@ func (tip *TraceProcess) Run(ctx context.Context) error {
 }
 
 // TopIdlingGoroutines returns defaultNumberOfTopGoroutines most idling goroutines
-func (tip *TraceProcess) TopIdlingGoroutines() []object.TopGoroutine {
+func (tip *TraceProcess) TopIdlingGoroutines() ([]object.TopGoroutine, error) {
 	tip.mx.Lock()
 	defer tip.mx.Unlock()
 
+	if tip.err != nil {
+		return nil, tip.err
+	}
+
 	tip.fillIdling()
 
-	return tip.idlingAsTop()
+	return tip.idlingAsTop(), nil
 }
 
 func (tip *TraceProcess) processEvent(ev *trace.Event) {

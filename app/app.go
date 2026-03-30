@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	apiCommon "github.com/maratig/trace_analyzer/api/common"
 	apiError "github.com/maratig/trace_analyzer/api/error"
 	"github.com/maratig/trace_analyzer/api/object"
 	heapProcess "github.com/maratig/trace_analyzer/internal/service/heap_process"
@@ -86,7 +87,7 @@ func (a *App) ProcessTraceSource(ctx context.Context, sourcePath string) (int, e
 	return len(a.traceProcesses) - 1, nil
 }
 
-// ProcessHeapSource creates a worker for reading and processing heap profile data from source. The returned int value
+// ProcessHeapSource creates a worker for reading and processing heap profile data from a source. The returned int value
 // is an id of the whole process for the given source. Later using that id one can get analytical info
 func (a *App) ProcessHeapSource(ctx context.Context, sourcePath string) (int, error) {
 	if ctx == nil {
@@ -119,32 +120,48 @@ func (a *App) ProcessHeapSource(ctx context.Context, sourcePath string) (int, er
 }
 
 // TopIdlingGoroutines returns the top n inactive goroutines
-func (a *App) TopIdlingGoroutines(ctx context.Context, id int) ([]object.TopGoroutine, error) {
+func (a *App) TopIdlingGoroutines(ctx context.Context, id int) ([]object.TopGoroutine, string, error) {
 	if ctx == nil {
-		return nil, apiError.ErrNilContext
+		return nil, "", apiError.ErrNilContext
 	}
 	if id < 0 {
-		return nil, errors.New("id must not be negative")
+		return nil, "", errors.New("id must not be negative")
 	}
 	if len(a.traceProcesses) == 0 || id >= len(a.traceProcesses) {
-		return nil, errors.New("no item with given id")
+		return nil, "", errors.New("no item with given id")
 	}
 
-	return a.traceProcesses[id].TopIdlingGoroutines(), nil
+	ret, err := a.traceProcesses[id].TopIdlingGoroutines()
+	if err != nil {
+		if errors.Is(err, apiError.ErrRetryable) {
+			return nil, apiCommon.StatusProcessing, nil
+		}
+		return nil, "", err
+	}
+
+	return ret, "", nil
 }
 
 // HeapProfilesSummary returns summaries for all collected heap profiles by the given id
-func (a *App) HeapProfilesSummary(ctx context.Context, id int) ([][]object.HeapProfileSummary, error) {
+func (a *App) HeapProfilesSummary(ctx context.Context, id int) ([][]object.HeapProfileSummary, string, error) {
 	if ctx == nil {
-		return nil, apiError.ErrNilContext
+		return nil, "", apiError.ErrNilContext
 	}
 	if id < 0 {
-		return nil, errors.New("id must not be negative")
+		return nil, "", errors.New("id must not be negative")
 	}
 
 	if len(a.heapProcesses) == 0 || id >= len(a.heapProcesses) {
-		return nil, errors.New("no item with given id")
+		return nil, "", errors.New("no item with given id")
 	}
 
-	return a.heapProcesses[id].HeapProfilesSummary()
+	ret, err := a.heapProcesses[id].HeapProfilesSummary()
+	if err != nil {
+		if errors.Is(err, apiError.ErrRetryable) {
+			return nil, apiCommon.StatusProcessing, nil
+		}
+		return nil, "", err
+	}
+
+	return ret, "", nil
 }

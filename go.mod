@@ -1,13 +1,11 @@
 module github.com/maratig/trace_analyzer
 
-go 1.24.0
-
-toolchain go1.24.7
+go 1.26
 
 require (
-	github.com/google/pprof v0.0.0-20251002213607-436353cc1ee6
-	github.com/spf13/cobra v1.10.1
-	golang.org/x/exp v0.0.0-20251002181428-27f1f14c8bb9
+	github.com/google/pprof v0.0.0-20260302011040-a15ffb7f9dcc
+	github.com/spf13/cobra v1.10.2
+	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90
 )
 
 require (

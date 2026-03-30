@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,8 +64,9 @@ func WithProfileRangeConfig(interval, size time.Duration) Option {
 }
 
 func NewHeapProcessor(sourcePath string, opts ...Option) (*HeapProcess, error) {
-	if sourcePath == "" {
-		return nil, apiError.ErrEmptySourcePath
+	// TODO improve the source_path validation
+	if !strings.HasPrefix(sourcePath, "http://") && !strings.HasPrefix(sourcePath, "https://") {
+		return nil, apiError.ErrInvalidSourcePath
 	}
 
 	ret := HeapProcess{
@@ -114,25 +116,30 @@ func (hp *HeapProcess) Run(ctx context.Context) error {
 					resp, err := http.Get(p.cfg.sourcePath)
 					if err != nil {
 						p.mx.Lock()
-						p.err = fmt.Errorf("failed to get heap profile; %w", err)
+						p.err = fmt.Errorf("failed to get heap profile; %v; %w", err, apiError.ErrRetryable)
 						p.mx.Unlock()
-						return
+						continue
 					}
 
 					data, err := io.ReadAll(resp.Body)
+					resp.Body.Close()
 					if err != nil {
 						p.mx.Lock()
-						p.err = fmt.Errorf("failed to read heap profile response body; %w", err)
+						p.err = fmt.Errorf(
+							"failed to read heap profile response body; %v; %w", err, apiError.ErrRetryable,
+						)
 						p.mx.Unlock()
-						return
+						continue
 					}
-					resp.Body.Close()
 
 					if resp.StatusCode != http.StatusOK {
 						p.mx.Lock()
-						p.err = fmt.Errorf("heap profile response statusCode=%d; status=%s", resp.StatusCode, resp.Status)
+						p.err = fmt.Errorf(
+							"heap profile response statusCode=%d; status=%s; %w",
+							resp.StatusCode, resp.Status, apiError.ErrRetryable,
+						)
 						p.mx.Unlock()
-						return
+						continue
 					}
 
 					p.mx.Lock()
@@ -149,6 +156,10 @@ func (hp *HeapProcess) Run(ctx context.Context) error {
 func (hp *HeapProcess) HeapProfilesSummary() ([][]object.HeapProfileSummary, error) {
 	hp.mx.RLock()
 	defer hp.mx.RUnlock()
+
+	if hp.err != nil {
+		return nil, hp.err
+	}
 
 	ret := make([][]object.HeapProfileSummary, 0, len(hp.stat.profiles))
 	for _, rawProfiles := range hp.stat.profiles {
