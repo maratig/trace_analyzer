@@ -11,8 +11,9 @@ import (
 	"strconv"
 	"time"
 
-	apiError "github.com/maratig/trace_analyzer/api/error"
 	"golang.org/x/exp/trace"
+
+	apiError "github.com/maratig/trace_analyzer/api/error"
 )
 
 const defaultHttpListeningSeconds = 36000
