@@ -1,3 +1,3 @@
 package common
 
-const StatusRetrying = "retrying"
+const StatusProcessing = "processing"

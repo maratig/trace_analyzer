@@ -134,7 +134,7 @@ func (a *App) TopIdlingGoroutines(ctx context.Context, id int) ([]object.TopGoro
 	ret, err := a.traceProcesses[id].TopIdlingGoroutines()
 	if err != nil {
 		if errors.Is(err, apiError.ErrRetryable) {
-			return nil, apiCommon.StatusRetrying, nil
+			return nil, apiCommon.StatusProcessing, nil
 		}
 		return nil, "", err
 	}
@@ -158,7 +158,7 @@ func (a *App) HeapProfilesSummary(ctx context.Context, id int) ([][]object.HeapP
 	ret, err := a.heapProcesses[id].HeapProfilesSummary()
 	if err != nil {
 		if errors.Is(err, apiError.ErrRetryable) {
-			return nil, apiCommon.StatusRetrying, nil
+			return nil, apiCommon.StatusProcessing, nil
 		}
 		return nil, "", err
 	}
