@@ -17,7 +17,7 @@ import (
 func TestGoroutineStat(t *testing.T) {
 	addr := "127.0.0.1:11000"
 
-	t.Run("endpoint does not respond, should return in_progress", func(t *testing.T) {
+	t.Run("endpoint does not respond, should return a retryable error", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		t.Cleanup(cancel)
 		tp, err := traceProcess.NewTraceProcessor("http://some-fake-url/debug/pprof/trace")
@@ -54,7 +54,7 @@ func TestGoroutineStat(t *testing.T) {
 	// Wait for the previous subtest's trace connection to fully close before connecting again.
 	time.Sleep(500 * time.Millisecond)
 
-	t.Run("endpoint responds, then fails, should return in_progress", func(t *testing.T) {
+	t.Run("endpoint responds, then fails, should return a retryable error", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		t.Cleanup(cancel)
 
