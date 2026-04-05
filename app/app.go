@@ -13,7 +13,7 @@ import (
 	traceProcess "github.com/maratig/trace_analyzer/internal/service/trace_process"
 )
 
-// defaultApiPort is a default port for application's REST API
+// defaultApiPort is a default port for the application's REST API
 const defaultApiPort = 10000
 
 var (

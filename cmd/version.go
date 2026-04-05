@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	version    = "0.0.2"
+	version    = "0.3.1"
 	versionCmd = &cobra.Command{
 		Use:   "version",
 		Short: "Print version number of Trace analyzer",

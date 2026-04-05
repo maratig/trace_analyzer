@@ -3,7 +3,7 @@ module github.com/maratig/trace_analyzer
 go 1.26
 
 require (
-	github.com/google/pprof v0.0.0-20260302011040-a15ffb7f9dcc
+	github.com/google/pprof v0.0.0-20260402051712-545e8a4df936
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90
 )
